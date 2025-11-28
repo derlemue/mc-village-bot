@@ -209,6 +209,63 @@ async function attackNearbyMobs(bot) {
   }
 }
 
+// ===== HELPER FUNCTIONS =====
+/**
+ * Prüft ob ein Block "weich" ist (nicht tragfähig)
+ * Weiche Blöcke: Luft, Wasser, Lava, Laub, Sand, Schnee, etc.
+ */
+function isSoftBlock(block) {
+  if (!block || block.name === 'air' || block.name === 'cave_air') return true;
+  
+  const softBlockNames = [
+    'water', 'lava',
+    'oak_leaves', 'spruce_leaves', 'birch_leaves', 'jungle_leaves', 'acacia_leaves', 'dark_oak_leaves',
+    'mangrove_leaves', 'cherry_leaves',
+    'sand', 'red_sand', 'gravel', 'powder_snow',
+    'grass', 'seagrass', 'tall_seagrass',
+    'snow', 'snow_block',
+    'cobweb',
+    'nether_wart', 'warped_wart_block'
+  ];
+  
+  return softBlockNames.some(name => block.name.includes(name));
+}
+
+/**
+ * Prüft die Untergrundqualität und bestimmt die Fundament-Tiefe
+ * Rückgabe: 16 für weiches Material, 3 für solides Material
+ */
+function determineFoundationDepth(bot, area) {
+  // Prüfe mehrere Punkte um sicherzustellen
+  const checkPoints = [
+    { x: area.x1, z: area.z1 },
+    { x: area.x2, z: area.z1 },
+    { x: area.x1, z: area.z2 },
+    { x: area.x2, z: area.z2 },
+    { x: Math.floor((area.x1 + area.x2) / 2), z: Math.floor((area.z1 + area.z2) / 2) }
+  ];
+
+  let softBlockCount = 0;
+
+  for (const point of checkPoints) {
+    // Prüfe den Block direkt unter der Baugrundhöhe
+    const pos = new Vec3(point.x, area.y - 1, point.z);
+    const block = bot.blockAt(pos);
+    
+    if (isSoftBlock(block)) {
+      softBlockCount++;
+    }
+  }
+
+  // Wenn mehr als 50% der Punkte weich sind, nutze 16 Blöcke, sonst 3
+  const needsDeepFoundation = softBlockCount > (checkPoints.length / 2);
+  const depth = needsDeepFoundation ? 16 : 3;
+  
+  console.log(`🏗️ Untergrund-Check: ${softBlockCount}/${checkPoints.length} weiche Blöcke → Fundament-Tiefe: ${depth} Blöcke`);
+  
+  return depth;
+}
+
 // ===== PATTERN FUNCTIONS =====
 function findDoorInPattern(pattern) {
   if (!pattern) return { dx: 0, dz: 0, dy: 0 };
@@ -253,6 +310,9 @@ async function flattenArea(bot, area) {
   // ✅ Lade Chunks BEVOR wir bauen
   await loadChunksForArea(bot, area);
 
+  // ✅ Bestimme Fundament-Tiefe basierend auf Untergrund
+  const foundationDepth = determineFoundationDepth(bot, area);
+
   for (let x = area.x1; x <= area.x2; x++) {
     if (!global.botState.isBuilding) {
       console.log('⏹️ Geländevorbereitung abgebrochen');
@@ -262,8 +322,8 @@ async function flattenArea(bot, area) {
     for (let z = area.z1; z <= area.z2; z++) {
       if (!global.botState.isBuilding) return;
 
-      // --- PHASE 1: Unterfüllung ---
-      for (let yv = area.y - 16; yv < area.y; yv++) {
+      // --- PHASE 1: Unterfüllung mit dynamischer Tiefe ---
+      for (let yv = area.y - foundationDepth; yv < area.y; yv++) {
         if (!global.botState.isBuilding) return;
         await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, yv, z), FILL_BLOCK);
         await utils.sleep(6);
