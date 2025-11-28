@@ -10,7 +10,7 @@ const { saveState } = require('./persistence');
 const https = require('https');
 const CONSTANTS = require('./constants');
 const blockUtils = require('./blockUtils');
-const { loadChunksAround, loadChunksForArea } = require('./chunkLoader');
+const { loadChunksAround, loadChunksForArea, ensureChunksLoaded } = require('./chunkLoader');
 
 const {
   BUILD_DELAY,
@@ -553,6 +553,9 @@ module.exports = {
 
     houseCount = houseCount || utils.randomInt(30, 90);
     const villageId = registerOrUpdateVillage(centerX, centerY, centerZ, houseCount);
+
+    // ✅ NEU: Stelle sicher dass Chunks um das Dorf geladen sind
+    await ensureChunksLoaded(bot, centerX, centerZ);
 
     if (!global.botState.buildCoords ||
         global.botState.buildCoords.x !== centerX ||
