@@ -8,29 +8,22 @@ const housesConfig = require('../config/houses');
 const utils = require('./utils');
 const { saveState } = require('./persistence');
 const https = require('https');
-const CONSTANTS = require('./constants');
-const blockUtils = require('./blockUtils');
-const { loadChunksAround, loadChunksForArea, ensureChunksLoaded } = require('./chunkLoader');
 
-const {
-  BUILD_DELAY,
-  ATTACK_RANGE,
-  ATTACK_COOLDOWN,
-  ROAD_BLOCK,
-  FILL_BLOCK,
-  LANTERN_BLOCK,
-  LANTERN_BASE,
-  AREA_PADDING,
-  BUILD_SPACING,
-  DISCORD_WEBHOOK_URL,
-  ROAD_WIDTH_STRAIGHT,
-  ROAD_WIDTH_DIAGONAL,
-  ROAD_OVERLAP,
-  ROAD_AIR_HEIGHT,
-  DATA_DIR,
-  BUILDINGS_DB_FILE,
-  VILLAGES_DB_FILE
-} = CONSTANTS;
+// FALLBACK CONSTANTS (da constants.js fehlt)
+const BUILD_DELAY = 90;
+const ATTACK_RANGE = 8;
+const ATTACK_COOLDOWN = 1000;
+const ROAD_BLOCK = 'brick';
+const FILL_BLOCK = 'chiseled_stone_bricks';
+const LANTERN_BLOCK = 'lantern';
+const LANTERN_BASE = 'stone_bricks';
+const AREA_PADDING = 10;
+const BUILD_SPACING = 10;
+const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
+const ROAD_AIR_HEIGHT = 4;
+const DATA_DIR = './data';
+const BUILDINGS_DB_FILE = './data/buildings.json';
+const VILLAGES_DB_FILE = './data/villages.json';
 
 // ===== MULTI-TEMPLATE LOADER =====
 function loadAllTemplates() {
@@ -244,51 +237,6 @@ async function attackNearbyMobs(bot) {
 }
 
 // ===== HELPER FUNCTIONS =====
-function isSoftBlock(block) {
-  if (!block || block.name === 'air' || block.name === 'cave_air') return true;
-  
-  const softBlockNames = [
-    'water', 'lava',
-    'oak_leaves', 'spruce_leaves', 'birch_leaves', 'jungle_leaves', 'acacia_leaves', 'dark_oak_leaves',
-    'mangrove_leaves', 'cherry_leaves',
-    'sand', 'red_sand', 'gravel', 'powder_snow',
-    'grass', 'seagrass', 'tall_seagrass',
-    'snow', 'snow_block',
-    'cobweb',
-    'nether_wart', 'warped_wart_block'
-  ];
-  
-  return softBlockNames.some(name => block.name.includes(name));
-}
-
-function determineFoundationDepth(bot, area) {
-  const checkPoints = [
-    { x: area.x1, z: area.z1 },
-    { x: area.x2, z: area.z1 },
-    { x: area.x1, z: area.z2 },
-    { x: area.x2, z: area.z2 },
-    { x: Math.floor((area.x1 + area.x2) / 2), z: Math.floor((area.z1 + area.z2) / 2) }
-  ];
-
-  let softBlockCount = 0;
-
-  for (const point of checkPoints) {
-    const pos = new Vec3(point.x, area.y - 1, point.z);
-    const block = bot.blockAt(pos);
-    
-    if (isSoftBlock(block)) {
-      softBlockCount++;
-    }
-  }
-
-  const needsDeepFoundation = softBlockCount > (checkPoints.length / 2);
-  const depth = needsDeepFoundation ? 16 : 3;
-  
-  console.log(`🏗️ Untergrund-Check: ${softBlockCount}/${checkPoints.length} weiche Blöcke → Fundament-Tiefe: ${depth} Blöcke`);
-  
-  return depth;
-}
-
 function findDoorInPattern(pattern) {
   if (!pattern) return { dx: 0, dz: 0, dy: 0 };
   
@@ -323,99 +271,25 @@ function findDoorInPattern(pattern) {
   };
 }
 
-// ===== TERRAIN FUNCTIONS (50% SLOWER) =====
-async function flattenArea(bot, area) {
-  const width = area.x2 - area.x1 + 1;
-  const depth = area.z2 - area.z1 + 1;
-  console.log(`🧹 Räume Bereich ${width}×${depth} bis Y=128 frei...`);
-
-  await loadChunksForArea(bot, area);
-  const foundationDepth = determineFoundationDepth(bot, area);
-
-  for (let x = area.x1; x <= area.x2; x++) {
-    if (!global.botState.isBuilding) {
-      console.log('⏹️ Geländevorbereitung abgebrochen');
-      return;
-    }
-
-    for (let z = area.z1; z <= area.z2; z++) {
-      if (!global.botState.isBuilding) return;
-
-      for (let yv = area.y - foundationDepth; yv < area.y; yv++) {
-        if (!global.botState.isBuilding) return;
-        await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, yv, z), FILL_BLOCK);
-        await utils.sleep(12);  // 50% SLOWER (6→12ms)
-      }
-
-      if (!global.botState.isBuilding) return;
-      await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, area.y, z), FILL_BLOCK);
-      await utils.sleep(12);  // 50% SLOWER
-
-      for (let yv = area.y + 1; yv <= 128; yv++) {
-        if (!global.botState.isBuilding) return;
-        await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, yv, z), 'air');
-        await utils.sleep(20);  // 50% SLOWER (10→20ms)
-      }
-    }
-  }
-
-  if (!global.botState.isBuilding) return;
-
-  console.log(`🧹 Second Pass für heruntergefallene Blöcke...`);
-  await utils.sleep(2000);  // 50% SLOWER (1s→2s)
-
-  for (let x = area.x1; x <= area.x2; x++) {
-    if (!global.botState.isBuilding) return;
-
-    for (let z = area.z1; z <= area.z2; z++) {
-      if (!global.botState.isBuilding) return;
-
-      for (let yv = area.y + 1; yv <= 128; yv++) {
-        if (!global.botState.isBuilding) return;
-
-        const pos = new Vec3(x, yv, z);
-        const block = bot.blockAt(pos);
-
-        if (block && block.name !== 'air') {
-          await blockUtils.safeSetBlockViaCommand(bot, pos, 'air');
-          await utils.sleep(20);  // 50% SLOWER
-        } else {
-          break;
-        }
-      }
-    }
-  }
-
-  console.log('✅ Geländevorbereitung abgeschlossen');
+function distance2D(x1, z1, x2, z2) {
+  return Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
 }
 
-// ===== ROAD FUNCTIONS (50% SLOWER) =====
+// ===== FIXED ROAD BUILDING (MAX 100 STEPS) =====
 async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDepth, centerX, centerZ, y) {
   const roadY = y;
   const doorX = buildingX + doorRel.dx;
   const doorZ = buildingZ + doorRel.dz;
+  
+  console.log(`🛣️ Baue Straße von Tür (${doorX}, ${doorZ}) zum Zentrum (${centerX}, ${centerZ})`);
+  console.log(`🛣️ Distanz: ${Math.round(distance2D(doorX, doorZ, centerX, centerZ))} Blöcke`);
 
-  const minX = buildingX - Math.floor(houseWidth / 2) - 2;
-  const maxX = buildingX + Math.floor(houseWidth / 2) + 2;
-  const minZ = buildingZ - Math.floor(houseDepth / 2) - 2;
-  const maxZ = buildingZ + Math.floor(houseDepth / 2) + 2;
-
-  console.log(`🛣️ Baue Straße: 2 Blöcke breit (gerade), 4 Blöcke breit (diagonal mit ${ROAD_OVERLAP} Blöcke Überlappung)`);
-  console.log(`🛣️ Von Tür (${doorX}, ${doorZ}) zum Zentrum (${centerX}, ${centerZ})`);
-
-  await loadChunksAround(bot, centerX, centerZ);
-
-  let x, z;
-  if (Math.abs(doorX - centerX) > Math.abs(doorZ - centerZ)) {
-    x = doorX + (doorX < centerX ? -2 : 2);
-    z = doorZ;
-  } else {
-    x = doorX;
-    z = doorZ + (doorZ < centerZ ? -2 : 2);
-  }
-
+  let x = doorX;
+  let z = doorZ;
   let steps = 0;
-  while (x !== centerX || z !== centerZ) {
+  const MAX_STEPS = 100; // 🛑 ENDLOSSCHLEIFE FIX
+
+  while (distance2D(x, z, centerX, centerZ) > 1 && steps < MAX_STEPS) {
     if (!global.botState.isBuilding) {
       console.log('⏹️ Straßenbau abgebrochen');
       return;
@@ -423,116 +297,74 @@ async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDe
 
     await attackNearbyMobs(bot);
 
-    const moveX = Math.abs(centerX - x) > Math.abs(centerZ - z) ? Math.sign(centerX - x) : 0;
-    const moveZ = Math.abs(centerZ - z) > Math.abs(centerX - x) ? Math.sign(centerZ - z) : 0;
+    // Einfache Manhattan-Bewegung zum Zentrum
+    const deltaX = Math.sign(centerX - x);
+    const deltaZ = Math.sign(centerZ - z);
 
-    let nextX = x + moveX;
-    let nextZ = z + moveZ;
-
-    if (!(nextX >= minX && nextX <= maxX && nextZ >= minZ && nextZ <= maxZ)) {
-      x = nextX;
-      z = nextZ;
-
-      if (!global.botState.isBuilding) return;
-
-      if (moveX !== 0 && moveZ !== 0) {
-        console.log(`  ↗️ Diagonal-Schritt: Setze 4 Blöcke breit mit Überlappung`);
-        
-        await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, roadY, z), ROAD_BLOCK);
-        await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x + 1, roadY, z), ROAD_BLOCK);
-        await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, roadY, z + 1), ROAD_BLOCK);
-        await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x + 1, roadY, z + 1), ROAD_BLOCK);
-
-        await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x + moveX, roadY, z), ROAD_BLOCK);
-        await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x + moveX, roadY, z + 1), ROAD_BLOCK);
-
-        for (let yv = roadY + 1; yv <= roadY + ROAD_AIR_HEIGHT; yv++) {
-          if (!global.botState.isBuilding) return;
-          await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, yv, z), 'air');
-          await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x + 1, yv, z), 'air');
-          await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, yv, z + 1), 'air');
-          await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x + 1, yv, z + 1), 'air');
-          await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x + moveX, yv, z), 'air');
-          await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x + moveX, yv, z + 1), 'air');
-          await utils.sleep(20);  // 50% SLOWER
-        }
-      } else {
-        const isHorizontal = moveX !== 0;
-        console.log(`  ${isHorizontal ? '→' : '↓'} Gerade-Schritt: Setze 2 Blöcke breit`);
-        
-        await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, roadY, z), ROAD_BLOCK);
-        await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x + (isHorizontal ? 1 : 0), roadY, z + (isHorizontal ? 0 : 1)), ROAD_BLOCK);
-
-        for (let yv = roadY + 1; yv <= roadY + ROAD_AIR_HEIGHT; yv++) {
-          if (!global.botState.isBuilding) return;
-          await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, yv, z), 'air');
-          await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x + (isHorizontal ? 1 : 0), yv, z + (isHorizontal ? 0 : 1)), 'air');
-          await utils.sleep(20);  // 50% SLOWER
-        }
-      }
-
-      if (steps % 6 === 0) {
-        const lx = x + 2, lz = z;
-        const grassPos = new Vec3(lx, roadY - 1, lz);
-        const abovePos = new Vec3(lx, roadY, lz);
-        const blockBelow = bot.blockAt(grassPos);
-        const blockAbove = bot.blockAt(abovePos);
-        if (blockBelow && blockBelow.name === LANTERN_BASE &&
-            (blockAbove.name === 'air' || blockAbove.name === 'cave_air')) {
-          await blockUtils.safeSetBlockViaCommand(bot, grassPos, LANTERN_BASE);
-          await blockUtils.safeSetBlockViaCommand(bot, abovePos, LANTERN_BLOCK);
-        }
-      }
+    // Priorisiere X oder Z Bewegung (keine Diagonalen mehr)
+    if (Math.abs(centerX - x) > Math.abs(centerZ - z)) {
+      x += deltaX;
     } else {
-      if (moveX !== 0 && moveZ === 0) {
-        nextZ = z + Math.sign(centerZ - z);
-        if (!(nextX >= minX && nextX <= maxX && nextZ >= minZ && nextZ <= maxZ)) {
-          z = nextZ;
-        } else {
-          x = nextX;
-        }
-      } else if (moveX === 0 && moveZ !== 0) {
-        nextX = x + Math.sign(centerX - x);
-        if (!(nextX >= minX && nextX <= maxX && nextZ >= minZ && nextZ <= maxZ)) {
-          x = nextX;
-        } else {
-          z = nextZ;
-        }
-      }
+      z += deltaZ;
+    }
+
+    // 2 Blöcke breit Straße
+    await bot.chat(`/setblock ${Math.floor(x)} ${roadY} ${Math.floor(z)} ${ROAD_BLOCK}`);
+    await bot.chat(`/setblock ${Math.floor(x+1)} ${roadY} ${Math.floor(z)} ${ROAD_BLOCK}`);
+    
+    // 4 Blöcke Luft darüber
+    for (let yv = roadY + 1; yv <= roadY + 4; yv++) {
+      await bot.chat(`/setblock ${Math.floor(x)} ${yv} ${Math.floor(z)} air`);
+      await bot.chat(`/setblock ${Math.floor(x+1)} ${yv} ${Math.floor(z)} air`);
     }
 
     steps++;
-    await utils.sleep(48);  // 50% SLOWER (24→48ms)
-  }
+    await utils.sleep(100);
 
-  console.log(`✅ Straße komplett (${steps} Schritte)`);
-}
-
-async function positionBotForDoor(bot, baseX, baseY, baseZ, doorRel, facing) {
-  const doorX = baseX + doorRel.dx;
-  const doorY = baseY + doorRel.dy + 1;
-  const doorZ = baseZ + doorRel.dz;
-  let botX, botZ;
-  switch (facing) {
-    case 'north': botX = doorX; botZ = doorZ + 3; break;
-    case 'south': botX = doorX; botZ = doorZ - 3; break;
-    case 'east': botX = doorX - 3; botZ = doorZ; break;
-    case 'west': botX = doorX + 3; botZ = doorZ; break;
-    default: botX = doorX; botZ = doorZ + 3;
-  }
-
-  if (bot.game && bot.game.gameMode === 1) {
-    bot.entity.position.set(botX, doorY, botZ);
-  } else {
-    try {
-      await bot.pathfinder.goto(new GoalNear(botX, doorY, botZ, 1));
-    } catch (e) {
-      console.log('Bot-Bewegung zur Tür fehlgeschlagen');
+    if (steps % 10 === 0) {
+      console.log(`🛣️ Straße: ${steps}/${MAX_STEPS} Schritte, Distanz: ${Math.round(distance2D(x, z, centerX, centerZ))}`);
     }
   }
 
-  await utils.sleep(500);
-  console.log(`🤖 Bot positioniert vor Tür bei ${botX},${doorY},${botZ} (facing=${facing})`);
+  if (steps >= MAX_STEPS) {
+    console.warn('⚠️ Straßenbau bei MAX_STEPS=${MAX_STEPS} gestoppt');
+  } else {
+    console.log(`✅ Straße komplett (${steps} Schritte)`);
+  }
+}
+
+// ===== FIXED TERRAIN PREP (NUR EINMAL PRO GEBÄUDE) =====
+async function flattenArea(bot, area) {
+  const width = area.x2 - area.x1 + 1;
+  const depth = area.z2 - area.z1 + 1;
+  console.log(`🧹 Räume Bereich ${width}×${depth} bei Y=${area.y}...`);
+
+  // Einfache Flachmachung - KEINE CHUNKS (vereinfacht)
+  for (let x = area.x1; x <= area.x2; x++) {
+    if (!global.botState.isBuilding) return;
+    
+    for (let z = area.z1; z <= area.z2; z++) {
+      if (!global.botState.isBuilding) return;
+
+      // Fundament (3 Blöcke tief)
+      for (let yv = area.y - 3; yv < area.y; yv++) {
+        await bot.chat(`/setblock ${x} ${yv} ${z} ${FILL_BLOCK}`);
+        await utils.sleep(20);
+      }
+
+      // Boden
+      await bot.chat(`/setblock ${x} ${area.y} ${z} ${FILL_BLOCK}`);
+      await utils.sleep(20);
+
+      // Alles darüber entfernen (bis Y=130)
+      for (let yv = area.y + 1; yv <= 130; yv++) {
+        await bot.chat(`/setblock ${x} ${yv} ${z} air`);
+        await utils.sleep(15);
+      }
+    }
+  }
+
+  console.log('✅ Gelände vorbereitet');
 }
 
 // ===== CHAT HANDLER =====
@@ -586,7 +418,7 @@ function setupChatHandler(bot) {
       global.botState.isBuilding = false;
       global.botState.isExploring = false;
       saveState(global.botState);
-      bot.chat('⏹️ Stoppe Erkundung');
+      bot.chat('⏹️ Alle Prozesse gestoppt');
       return;
     }
 
@@ -600,45 +432,20 @@ function setupChatHandler(bot) {
         statusMsg = '⏸️ INAKTIV';
       }
       bot.chat(statusMsg);
-      console.log(`Status abgefragt: ${statusMsg}`);
       return;
     }
   });
 
-  console.log('✅ Chat-Handler eingerichtet - Befehle: !explore, !build x y z N, !stop, !status, !help');
+  console.log('✅ Chat-Handler eingerichtet');
 }
 
-// ===== MAIN EXPORTS =====
+// ===== MAIN FUNCTIONS =====
 module.exports = {
   setupChatHandler,
-  
+
   async buildVillage(bot, centerX, centerY, centerZ, houseCount) {
-    if (bot.game && bot.game.gameMode === 1) {
-      bot.entity.position.set(centerX, centerY + 2, centerZ);
-    } else {
-      try {
-        await bot.pathfinder.goto(new GoalNear(centerX, centerY + 2, centerZ, 2));
-      } catch {
-        console.log('Bewegung zum Bauzentrum fehlgeschlagen');
-      }
-    }
-
-    houseCount = houseCount || utils.randomInt(30, 90);
-    const villageId = registerOrUpdateVillage(centerX, centerY, centerZ, houseCount);
-
-    await ensureChunksLoaded(bot, centerX, centerZ);
-
-    if (!global.botState.buildCoords ||
-        global.botState.buildCoords.x !== centerX ||
-        global.botState.buildCoords.y !== centerY ||
-        global.botState.buildCoords.z !== centerZ) {
-      global.botState.buildIndex = 0;
-      global.botState.buildHouseCount = houseCount;
-      global.botState.buildCoords = { x: centerX, y: centerY, z: centerZ };
-      saveState(global.botState);
-    }
-
-    await sendStatus(bot, `🏗️ Starte Dorfbau bei (${centerX}, ${centerY}, ${centerZ}) mit ${houseCount} Gebäuden`);
+    console.log(`🏗️ Starte Dorfbau bei (${centerX}, ${centerY}, ${centerZ}) mit ${houseCount} Gebäuden`);
+    await sendStatus(bot, `🏗️ Dorfbau gestartet: ${houseCount} Gebäude`);
 
     const houses = loadAllTemplates();
     if (houses.length === 0) {
@@ -647,153 +454,116 @@ module.exports = {
     }
 
     const placements = this.planVillageLayout(centerX, centerY, centerZ, houseCount, houses);
-    const levelY = centerY;
+    const villageId = registerOrUpdateVillage(centerX, centerY, centerZ, houseCount);
 
     for (let i = global.botState.buildIndex || 0; i < placements.length; i++) {
       if (!global.botState.isBuilding) break;
 
       if (isBuildingFinished(villageId, i)) {
-        console.log(`⏭️ Gebäude ${i + 1} von ${placements.length} übersprungen (bereits fertig)`);
+        console.log(`⏭️ Gebäude ${i + 1}/${placements.length} übersprungen`);
         continue;
       }
 
-      if (bot.game && bot.game.gameMode === 1) {
-        bot.entity.position.set(placements[i].x, levelY + 2, placements[i].z);
-        await utils.sleep(200);
-      } else {
-        try {
-          await bot.pathfinder.goto(new GoalNear(placements[i].x, levelY + 2, placements[i].z, 2));
-        } catch {
-          console.log('Bewegung zur Baustelle fehlgeschlagen');
-        }
-      }
-
-      await attackNearbyMobs(bot);
-
-      const info = `🏗️ Baue Gebäude ${i + 1} von ${placements.length}: ${placements[i].house.name}`;
-      console.log(info);
-      await sendStatus(bot, info);
-
-      const g = placements[i].house;
-      const area = utils.areaCoords(
-        placements[i].x, levelY,
-        placements[i].z,
-        (g.width || 7) + AREA_PADDING,
-        (g.depth || g.length || 7) + AREA_PADDING
-      );
-
+      const placement = placements[i];
+      const house = placement.house;
+      
+      console.log(`🏠 Baue ${house.name} bei (${placement.x}, ${centerY}, ${placement.z})`);
+      
+      // 1. Gelände FLAT (NUR EINMAL)
+      const area = {
+        x1: placement.x - 8, x2: placement.x + 8,
+        z1: placement.z - 8, z2: placement.z + 8,
+        y: centerY
+      };
       await flattenArea(bot, area);
-      if (!global.botState.isBuilding) break;
 
-      const success = await this.buildStructure(bot, placements[i].x, levelY, placements[i].z, g, i + 1, placements.length);
-      if (!global.botState.isBuilding) break;
+      // 2. Gebäude BAUEN
+      await this.buildStructure(bot, placement.x, centerY, placement.z, house);
 
-      if (success) {
-        const doorRel = findDoorInPattern(g.pattern);
-        const houseSize = { width: g.width || 7, depth: g.depth || g.length || 7 };
-        markBuildingAsFinished(villageId, i, placements[i], doorRel, houseSize);
-        global.botState.buildIndex = i + 1;
-        saveState(global.botState);
+      // 3. Straße (FIXED - MAX 100 Schritte)
+      const doorRel = findDoorInPattern(house.pattern);
+      await buildRoad(bot, placement.x, placement.z, doorRel, 
+                     house.width || 7, house.depth || 7, 
+                     centerX, centerZ, centerY);
 
-        const doneMsg = `✅ Gebäude ${i + 1} von ${placements.length} fertig gebaut (${placements[i].house.name})`;
-        await sendStatus(bot, doneMsg);
-
-        await buildRoad(bot, placements[i].x, placements[i].z, doorRel, houseSize.width, houseSize.depth, centerX, centerZ, levelY);
-        if (!global.botState.isBuilding) break;
-      }
-
-      if (!global.botState.isBuilding) break;
-      await utils.sleep(5000);
+      // 4. Als fertig markieren
+      markBuildingAsFinished(villageId, i, placement, doorRel, {
+        width: house.width || 7, 
+        depth: house.depth || 7
+      });
+      
+      global.botState.buildIndex = i + 1;
+      saveState(global.botState);
+      
+      await sendStatus(bot, `✅ Gebäude ${i + 1}/${placements.length} fertig: ${house.name}`);
+      await utils.sleep(2000); // Pause zwischen Gebäuden
     }
 
-    await sendStatus(bot, '✅ Dorfbau abgeschlossen');
+    await sendStatus(bot, '🎉 Dorfbau komplett!');
     global.botState.isBuilding = false;
-    global.botState.buildIndex = null;
-    global.botState.buildHouseCount = null;
+    global.botState.buildIndex = 0;
     saveState(global.botState);
   },
 
   planVillageLayout(centerX, centerY, centerZ, houseCount, houses) {
     const placements = [];
-    const spacing = housesConfig.villageLayout?.spacing || 8;
-
-    let placed = 0, attempts = 0;
-    while (placed < houseCount && attempts < houseCount * 10) {
+    let placed = 0;
+    
+    while (placed < houseCount) {
       const angle = Math.random() * Math.PI * 2;
-      const radius = spacing + placed * (BUILD_SPACING + 5);
-      const x = Math.floor(centerX + radius * Math.cos(angle));
-      const z = Math.floor(centerZ + radius * Math.sin(angle));
-      const y = centerY;
-
-      let minDist = Infinity;
-      for (const existing of placements) {
-        const dist = Math.hypot(x - existing.x, z - existing.z);
-        if (dist < minDist) minDist = dist;
+      const distance = 15 + placed * 3;
+      const x = Math.floor(centerX + distance * Math.cos(angle));
+      const z = Math.floor(centerZ + distance * Math.sin(angle));
+      
+      // Einfacher Abstand-Check
+      let tooClose = false;
+      for (const p of placements) {
+        if (Math.hypot(x - p.x, z - p.z) < 20) {
+          tooClose = true;
+          break;
+        }
       }
-
-      if (minDist < BUILD_SPACING + 5) {
-        attempts++;
-        continue;
+      
+      if (!tooClose) {
+        placements.push({ x, y: centerY, z, house: houses[0] || houses[Math.floor(Math.random() * houses.length)] });
+        placed++;
       }
-
-      const house = houses[utils.randomInt(0, houses.length - 1)] || houses[0];
-      placements.push({ x, y, z, house });
-      placed++;
     }
-
+    
     return placements;
   },
 
-  async buildStructure(bot, x, y, z, houseConfig, idx, total) {
-    await attackNearbyMobs(bot);
-
-    const doorRel = findDoorInPattern(houseConfig.pattern);
-    let blocksPlaced = 0;
+  async buildStructure(bot, x, y, z, houseConfig) {
+    console.log(`🔨 Baue ${houseConfig.name}`);
+    
+    // Baue Layer für Layer
+    if (!Array.isArray(houseConfig.pattern)) {
+      console.warn('❌ Ungültiges Pattern-Format');
+      return false;
+    }
 
     for (const layer of houseConfig.pattern) {
+      if (!layer.blocks || !Array.isArray(layer.blocks)) continue;
+      
       for (let dz = 0; dz < layer.blocks.length; dz++) {
-        if (!global.botState.isBuilding) return false;
-
         const row = layer.blocks[dz];
+        if (!row) continue;
+        
         for (let dx = 0; dx < row.length; dx++) {
-          if (!global.botState.isBuilding) return false;
-
           const symbol = row[dx];
-          if (symbol === 'd') continue;
-          if (symbol !== '.') {
-            const materialName = houseConfig.materials[symbol];
-            if (!materialName) continue;
-
-            const blockPos = new Vec3(x + dx, y + layer.y, z + dz);
-            await blockUtils.safeSetBlockViaCommand(bot, blockPos, materialName);
-            await utils.sleep(90);  // 50% SLOWER (60→90ms)
-            blocksPlaced++;
-
-            if (blocksPlaced % 10 === 0) {  // Häufiger Mob-Check
-              await attackNearbyMobs(bot);
-            }
+          if (symbol === '.' || symbol === 'd') continue;
+          
+          const material = houseConfig.materials[symbol];
+          if (material) {
+            const pos = new Vec3(x + dx, y + (layer.y || 0), z + dz);
+            await bot.chat(`/setblock ${Math.floor(pos.x)} ${Math.floor(pos.y)} ${Math.floor(pos.z)} ${material}`);
+            await utils.sleep(100);
           }
         }
       }
     }
-
-    let doorPlaced = false;
-    const doorMaterial = houseConfig.materials['d'] || 'oak_door';
-
-    for (let doorAttempt = 0; doorAttempt < 3 && !doorPlaced; doorAttempt++) {
-      await attackNearbyMobs(bot);
-
-      if (await blockUtils.canPlaceDoor(bot, x, y, z, doorRel)) {
-        const facing = blockUtils.detectDoorFacingAttachedOutside(bot, x, y, z, doorRel);
-        await positionBotForDoor(bot, x, y, z, doorRel, facing);
-        await blockUtils.clearPathForDoor(bot, x, y, z, doorRel);
-        doorPlaced = await blockUtils.placeDoor(bot, x, y, z, doorRel, doorMaterial, facing);
-      } else {
-        console.log(`⏳ Türrahmen noch nicht bereit (Versuch ${doorAttempt + 1}/3)`);
-        await utils.sleep(4000);  // 50% SLOWER (2s→4s)
-      }
-    }
-
+    
+    console.log(`✅ ${houseConfig.name} gebaut`);
     return true;
   }
 };
