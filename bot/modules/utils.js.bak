@@ -1,0 +1,58 @@
+const fs = require('fs');
+const path = require('path');
+
+const LOG_FILE = path.join(__dirname, '../logs/bot.log');
+
+module.exports = {
+  // Zufällige Zahl zwischen min und max (inklusiv)
+  randomInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+  },
+  
+  // Sleep-Funktion für Delays
+  sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  },
+  
+  // Log-Nachricht in Datei schreiben
+  logToFile(message, level = 'info') {
+    const timestamp = new Date().toISOString();
+    const logMessage = `[${timestamp}] [${level.toUpperCase()}] ${message}\n`;
+    
+    try {
+      fs.appendFileSync(LOG_FILE, logMessage);
+    } catch (error) {
+      console.error('Fehler beim Schreiben der Log-Datei:', error);
+    }
+  },
+  
+  // Formatiere Koordinaten
+  formatCoords(vec3) {
+    return `(${Math.floor(vec3.x)}, ${Math.floor(vec3.y)}, ${Math.floor(vec3.z)})`;
+  },
+  
+  // Berechne Distanz zwischen zwei Punkten
+  distance(pos1, pos2) {
+    return Math.sqrt(
+      Math.pow(pos1.x - pos2.x, 2) +
+      Math.pow(pos1.y - pos2.y, 2) +
+      Math.pow(pos1.z - pos2.z, 2)
+    );
+  },
+  
+  // Chunk-Koordinaten berechnen
+  getChunkCoords(position) {
+    return {
+      x: Math.floor(position.x / 16),
+      z: Math.floor(position.z / 16)
+    };
+  },
+  
+  // Formatiere Uptime
+  formatUptime(seconds) {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hours}h ${minutes}m ${secs}s`;
+  }
+};

@@ -1,0 +1,15 @@
+# Env / Secrets
+.env
+.env.local
+.env.*.local
+
+# Laufzeitdaten
+data/
+logs/
+*.log
+
+# Node / Dependencies
+node_modules/
+npm-debug.log*
+yarn.lock
+pnpm-lock.yaml

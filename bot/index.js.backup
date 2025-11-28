@@ -1,0 +1,144 @@
+const mineflayer = require('mineflayer');
+const { pathfinder, Movements, goals } = require('mineflayer-pathfinder');
+const { GoalBlock, GoalNear } = goals;
+const fs = require('fs');
+const path = require('path');
+
+const chatHandler = require('./modules/chatHandler');
+const builder = require('./modules/builder');
+const explorer = require('./modules/explorer');
+const utils = require('./modules/utils');
+
+const STATE_FILE = path.join(__dirname, '../data/botState.json');
+
+function saveState(state) {
+  fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+}
+
+function loadState() {
+  if (fs.existsSync(STATE_FILE)) {
+    return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+  }
+  return null;
+}
+
+const config = {
+  host: process.env.MC_SERVER || 'localhost',
+  port: parseInt(process.env.MC_PORT) || 25565,
+  username: process.env.MC_USERNAME || 'BuilderBot',
+  version: process.env.MC_VERSION || '1.20.1',
+  auth: 'microsoft',
+  tokens: {
+    accessToken: process.env.MC_TOKEN
+  }
+};
+
+console.log('🤖 Minecraft Village Builder Bot startet...');
+console.log(`📡 Verbinde mit ${config.host}:${config.port} als ${config.username}`);
+
+const bot = mineflayer.createBot(config);
+
+bot.loadPlugin(pathfinder);
+
+global.botState = loadState() || {
+  isBuilding: false,
+  isExploring: false,
+  currentTask: null,
+  buildCoords: null,
+  buildProgress: 0,
+  exploredChunks: 0,
+  startTime: Date.now()
+};
+
+bot.once('spawn', async () => {
+  const mcData = require('minecraft-data')(bot.version);
+  const Movements = require('mineflayer-pathfinder').Movements;
+  const movements = new Movements(bot, mcData);
+
+  movements.scafoldingBlocks = [];
+  movements.allow1by1towers = false;
+  movements.canDig = false;
+  movements.allowFreeMotion = true; // Wichtig für Creative!
+
+  bot.pathfinder.setMovements(movements);
+
+  // Öffentliche Nachricht einmalig
+//  bot.chat('hi@all');
+
+// Nach bot erstellt:
+builder.setupChatHandler(bot);
+
+  // Private Info
+  bot.whisper(process.env.AUTHORIZED_USER, `Ich bin bereit. Nutze !help für Befehle.`);
+
+  // Task fortsetzen falls vorhanden
+  if (global.botState.isBuilding && global.botState.buildCoords) {
+    bot.whisper(process.env.AUTHORIZED_USER, `Setze Bau fort bei ${utils.formatCoords(global.botState.buildCoords)}...`);
+    await builder.buildVillage(bot, global.botState.buildCoords.x, global.botState.buildCoords.y, global.botState.buildCoords.z);
+  } else if (global.botState.isExploring) {
+    bot.whisper(process.env.AUTHORIZED_USER, 'Setze Erkundung fort...');
+    await explorer.startExploring(bot);
+  }
+});
+
+bot.on('chat', async (username, message) => {
+  if (username === bot.username) return;
+
+  if (username !== process.env.AUTHORIZED_USER) return;
+
+  console.log(`💬 ${username}: ${message}`);
+  try {
+    await chatHandler.handleCommand(bot, username, message);
+  } catch (err) {
+    console.error('Fehler im Chat-Handler:', err);
+    bot.whisper(process.env.AUTHORIZED_USER, 'Fehler beim Verarbeiten des Befehls.');
+  }
+});
+
+bot.on('health', () => {
+  if (bot.health < 10) {
+    bot.whisper(process.env.AUTHORIZED_USER, `Warnung: Niedrige Gesundheit (${bot.health}/20)`);
+  }
+});
+
+bot.on('death', () => {
+  bot.whisper(process.env.AUTHORIZED_USER, 'Ich bin gestorben! Respawne...');
+  global.botState.isBuilding = false;
+  global.botState.isExploring = false;
+  saveState(global.botState);
+});
+
+bot.on('respawn', () => {
+  bot.whisper(process.env.AUTHORIZED_USER, 'Zurück im Spiel!');
+});
+
+bot.on('end', (reason) => {
+  console.log('❌ Bot getrennt:', reason);
+  setTimeout(() => {
+    console.log('🔄 Versuche Reconnect...');
+    bot._client.connect();
+  }, 5000);
+});
+
+bot.on('kicked', (reason) => {
+  console.log('⚠️ Bot gekickt:', reason);
+});
+
+bot.on('error', (err) => {
+  console.error('❌ Bot Fehler:', err.message);
+});
+
+process.on('SIGINT', () => {
+  console.log('🛑 Herunterfahren...');
+  bot.whisper(process.env.AUTHORIZED_USER, 'Auf Wiedersehen!');
+  bot.quit();
+  process.exit(0);
+});
+
+process.on('SIGTERM', () => {
+  console.log('🛑 SIGTERM empfangen');
+  bot.quit();
+  process.exit(0);
+});
+
+module.exports = { bot, saveState };
