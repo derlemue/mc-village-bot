@@ -32,6 +32,41 @@ const {
   VILLAGES_DB_FILE
 } = CONSTANTS;
 
+// ===== MULTI-TEMPLATE LOADER =====
+function loadAllTemplates() {
+  const templatesDir = path.join(__dirname, '../config/templates');
+  const allHouses = [];
+  
+  // Fallback zu houses.js wenn templates/ nicht existiert
+  if (!fs.existsSync(templatesDir)) {
+    console.warn('⚠️ templates/ Verzeichnis nicht gefunden - fallback zu houses.js');
+    if (housesConfig.villageHouses) {
+      return housesConfig.villageHouses.filter(h => h.profession !== 'decoration');
+    }
+    return [];
+  }
+
+  const templateFiles = fs.readdirSync(templatesDir)
+    .filter(file => file.endsWith('.js'))
+    .sort();
+
+  console.log(`📁 Lade ${templateFiles.length} Template-Dateien:`);
+  
+  templateFiles.forEach(file => {
+    try {
+      const templateModule = require(path.join(templatesDir, file));
+      const houses = templateModule.villageHouses || [];
+      console.log(`  ✅ ${file}: ${houses.length} Häuser`);
+      allHouses.push(...houses);
+    } catch (e) {
+      console.error(`❌ Fehler bei ${file}:`, e.message);
+    }
+  });
+
+  console.log(`🎉 Gesamt: ${allHouses.length} verfügbare Gebäude`);
+  return allHouses.filter(h => h.profession !== 'decoration');
+}
+
 // ===== DATABASE FUNCTIONS =====
 function ensureDataDir() {
   try {
@@ -209,6 +244,52 @@ async function attackNearbyMobs(bot) {
   }
 }
 
+// ===== HELPER FUNCTIONS =====
+function isSoftBlock(block) {
+  if (!block || block.name === 'air' || block.name === 'cave_air') return true;
+  
+  const softBlockNames = [
+    'water', 'lava',
+    'oak_leaves', 'spruce_leaves', 'birch_leaves', 'jungle_leaves', 'acacia_leaves', 'dark_oak_leaves',
+    'mangrove_leaves', 'cherry_leaves',
+    'sand', 'red_sand', 'gravel', 'powder_snow',
+    'grass', 'seagrass', 'tall_seagrass',
+    'snow', 'snow_block',
+    'cobweb',
+    'nether_wart', 'warped_wart_block'
+  ];
+  
+  return softBlockNames.some(name => block.name.includes(name));
+}
+
+function determineFoundationDepth(bot, area) {
+  const checkPoints = [
+    { x: area.x1, z: area.z1 },
+    { x: area.x2, z: area.z1 },
+    { x: area.x1, z: area.z2 },
+    { x: area.x2, z: area.z2 },
+    { x: Math.floor((area.x1 + area.x2) / 2), z: Math.floor((area.z1 + area.z2) / 2) }
+  ];
+
+  let softBlockCount = 0;
+
+  for (const point of checkPoints) {
+    const pos = new Vec3(point.x, area.y - 1, point.z);
+    const block = bot.blockAt(pos);
+    
+    if (isSoftBlock(block)) {
+      softBlockCount++;
+    }
+  }
+
+  const needsDeepFoundation = softBlockCount > (checkPoints.length / 2);
+  const depth = needsDeepFoundation ? 16 : 3;
+  
+  console.log(`🏗️ Untergrund-Check: ${softBlockCount}/${checkPoints.length} weiche Blöcke → Fundament-Tiefe: ${depth} Blöcke`);
+  
+  return depth;
+}
+
 // ===== PATTERN FUNCTIONS =====
 function findDoorInPattern(pattern) {
   if (!pattern) return { dx: 0, dz: 0, dy: 0 };
@@ -250,8 +331,9 @@ async function flattenArea(bot, area) {
   const depth = area.z2 - area.z1 + 1;
   console.log(`🧹 Räume Bereich ${width}×${depth} bis Y=128 frei...`);
 
-  // ✅ Lade Chunks BEVOR wir bauen
   await loadChunksForArea(bot, area);
+
+  const foundationDepth = determineFoundationDepth(bot, area);
 
   for (let x = area.x1; x <= area.x2; x++) {
     if (!global.botState.isBuilding) {
@@ -262,19 +344,19 @@ async function flattenArea(bot, area) {
     for (let z = area.z1; z <= area.z2; z++) {
       if (!global.botState.isBuilding) return;
 
-      // --- PHASE 1: Unterfüllung ---
-      for (let yv = area.y - 16; yv < area.y; yv++) {
+      // PHASE 1: Unterfüllung mit dynamischer Tiefe
+      for (let yv = area.y - foundationDepth; yv < area.y; yv++) {
         if (!global.botState.isBuilding) return;
         await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, yv, z), FILL_BLOCK);
         await utils.sleep(6);
       }
 
-      // --- PHASE 2: Gebäude-Level setzen ---
+      // PHASE 2: Gebäude-Level setzen
       if (!global.botState.isBuilding) return;
       await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, area.y, z), FILL_BLOCK);
       await utils.sleep(6);
 
-      // --- PHASE 3: Alles über dem Level entfernen ---
+      // PHASE 3: Alles über dem Level entfernen
       for (let yv = area.y + 1; yv <= 128; yv++) {
         if (!global.botState.isBuilding) return;
         await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, yv, z), 'air');
@@ -285,7 +367,7 @@ async function flattenArea(bot, area) {
 
   if (!global.botState.isBuilding) return;
 
-  // --- PHASE 4: Second Pass für heruntergefallene Blöcke ---
+  // PHASE 4: Second Pass für heruntergefallene Blöcke
   console.log(`🧹 Second Pass für heruntergefallene Blöcke...`);
   await utils.sleep(1000);
 
@@ -328,7 +410,6 @@ async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDe
   console.log(`🛣️ Baue Straße: 2 Blöcke breit (gerade), 4 Blöcke breit (diagonal mit ${ROAD_OVERLAP} Blöcke Überlappung)`);
   console.log(`🛣️ Von Tür (${doorX}, ${doorZ}) zum Zentrum (${centerX}, ${centerZ})`);
 
-  // ✅ Lade Chunks um die Straße
   await loadChunksAround(bot, centerX, centerZ);
 
   let x, z;
@@ -362,7 +443,6 @@ async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDe
       if (!global.botState.isBuilding) return;
 
       if (moveX !== 0 && moveZ !== 0) {
-        // ===== DIAGONALE: 4 Blöcke breit mit 2 Blöcke Überlappung =====
         console.log(`  ↗️ Diagonal-Schritt: Setze 4 Blöcke breit mit Überlappung`);
         
         await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, roadY, z), ROAD_BLOCK);
@@ -384,7 +464,6 @@ async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDe
           await utils.sleep(10);
         }
       } else {
-        // ===== GERADE: 2 Blöcke breit =====
         const isHorizontal = moveX !== 0;
         console.log(`  ${isHorizontal ? '→' : '↓'} Gerade-Schritt: Setze 2 Blöcke breit`);
         
@@ -554,7 +633,6 @@ module.exports = {
     houseCount = houseCount || utils.randomInt(30, 90);
     const villageId = registerOrUpdateVillage(centerX, centerY, centerZ, houseCount);
 
-    // ✅ NEU: Stelle sicher dass Chunks um das Dorf geladen sind
     await ensureChunksLoaded(bot, centerX, centerZ);
 
     if (!global.botState.buildCoords ||
@@ -569,7 +647,14 @@ module.exports = {
 
     await sendStatus(bot, `🏗️ Starte Dorfbau bei (${centerX}, ${centerY}, ${centerZ}) mit ${houseCount} Gebäuden`);
 
-    const placements = this.planVillageLayout(centerX, centerY, centerZ, houseCount);
+    // ✅ DYNAMIC TEMPLATE LOADING
+    const houses = loadAllTemplates();
+    if (houses.length === 0) {
+      await sendStatus(bot, '❌ Keine Templates gefunden!');
+      return;
+    }
+
+    const placements = this.planVillageLayout(centerX, centerY, centerZ, houseCount, houses);
     const levelY = centerY;
 
     for (let i = global.botState.buildIndex || 0; i < placements.length; i++) {
@@ -636,10 +721,9 @@ module.exports = {
     saveState(global.botState);
   },
 
-  planVillageLayout(centerX, centerY, centerZ, houseCount) {
+  planVillageLayout(centerX, centerY, centerZ, houseCount, houses) {
     const placements = [];
     const spacing = housesConfig.villageLayout?.spacing || 8;
-    const houses = housesConfig.villageHouses?.filter(h => h.profession !== 'decoration') || [];
 
     let placed = 0, attempts = 0;
     while (placed < houseCount && attempts < houseCount * 10) {
