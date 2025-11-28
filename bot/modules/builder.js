@@ -266,19 +266,19 @@ async function flattenArea(bot, area) {
       for (let yv = area.y - 16; yv < area.y; yv++) {
         if (!global.botState.isBuilding) return;
         await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, yv, z), FILL_BLOCK);
-        await utils.sleep(5);
+        await utils.sleep(6);
       }
 
       // --- PHASE 2: Gebäude-Level setzen ---
       if (!global.botState.isBuilding) return;
       await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, area.y, z), FILL_BLOCK);
-      await utils.sleep(5);
+      await utils.sleep(6);
 
       // --- PHASE 3: Alles über dem Level entfernen ---
       for (let yv = area.y + 1; yv <= 128; yv++) {
         if (!global.botState.isBuilding) return;
         await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, yv, z), 'air');
-        await utils.sleep(8);
+        await utils.sleep(10);
       }
     }
   }
@@ -303,7 +303,7 @@ async function flattenArea(bot, area) {
 
         if (block && block.name !== 'air') {
           await blockUtils.safeSetBlockViaCommand(bot, pos, 'air');
-          await utils.sleep(8);
+          await utils.sleep(10);
         } else {
           break;
         }
@@ -381,7 +381,7 @@ async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDe
           await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x + 1, yv, z + 1), 'air');
           await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x + moveX, yv, z), 'air');
           await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x + moveX, yv, z + 1), 'air');
-          await utils.sleep(8);
+          await utils.sleep(10);
         }
       } else {
         // ===== GERADE: 2 Blöcke breit =====
@@ -395,7 +395,7 @@ async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDe
           if (!global.botState.isBuilding) return;
           await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, yv, z), 'air');
           await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x + (isHorizontal ? 1 : 0), yv, z + (isHorizontal ? 0 : 1)), 'air');
-          await utils.sleep(8);
+          await utils.sleep(10);
         }
       }
 
@@ -430,7 +430,7 @@ async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDe
     }
 
     steps++;
-    await utils.sleep(20);
+    await utils.sleep(24);
   }
 
   console.log(`✅ Straße komplett (${steps} Schritte)`);
@@ -690,7 +690,7 @@ module.exports = {
 
             const blockPos = new Vec3(x + dx, y + layer.y, z + dz);
             await blockUtils.safeSetBlockViaCommand(bot, blockPos, materialName);
-            await utils.sleep(BUILD_DELAY);
+            await utils.sleep(60);
             blocksPlaced++;
 
             if (blocksPlaced % 15 === 0) {
