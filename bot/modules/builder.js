@@ -37,7 +37,6 @@ function loadAllTemplates() {
   const templatesDir = path.join(__dirname, '../config/templates');
   const allHouses = [];
   
-  // Fallback zu houses.js wenn templates/ nicht existiert
   if (!fs.existsSync(templatesDir)) {
     console.warn('⚠️ templates/ Verzeichnis nicht gefunden - fallback zu houses.js');
     if (housesConfig.villageHouses) {
@@ -290,7 +289,6 @@ function determineFoundationDepth(bot, area) {
   return depth;
 }
 
-// ===== PATTERN FUNCTIONS =====
 function findDoorInPattern(pattern) {
   if (!pattern) return { dx: 0, dz: 0, dy: 0 };
   
@@ -325,14 +323,13 @@ function findDoorInPattern(pattern) {
   };
 }
 
-// ===== TERRAIN FUNCTIONS =====
+// ===== TERRAIN FUNCTIONS (50% SLOWER) =====
 async function flattenArea(bot, area) {
   const width = area.x2 - area.x1 + 1;
   const depth = area.z2 - area.z1 + 1;
   console.log(`🧹 Räume Bereich ${width}×${depth} bis Y=128 frei...`);
 
   await loadChunksForArea(bot, area);
-
   const foundationDepth = determineFoundationDepth(bot, area);
 
   for (let x = area.x1; x <= area.x2; x++) {
@@ -344,32 +341,28 @@ async function flattenArea(bot, area) {
     for (let z = area.z1; z <= area.z2; z++) {
       if (!global.botState.isBuilding) return;
 
-      // PHASE 1: Unterfüllung mit dynamischer Tiefe
       for (let yv = area.y - foundationDepth; yv < area.y; yv++) {
         if (!global.botState.isBuilding) return;
         await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, yv, z), FILL_BLOCK);
-        await utils.sleep(6);
+        await utils.sleep(12);  // 50% SLOWER (6→12ms)
       }
 
-      // PHASE 2: Gebäude-Level setzen
       if (!global.botState.isBuilding) return;
       await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, area.y, z), FILL_BLOCK);
-      await utils.sleep(6);
+      await utils.sleep(12);  // 50% SLOWER
 
-      // PHASE 3: Alles über dem Level entfernen
       for (let yv = area.y + 1; yv <= 128; yv++) {
         if (!global.botState.isBuilding) return;
         await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, yv, z), 'air');
-        await utils.sleep(10);
+        await utils.sleep(20);  // 50% SLOWER (10→20ms)
       }
     }
   }
 
   if (!global.botState.isBuilding) return;
 
-  // PHASE 4: Second Pass für heruntergefallene Blöcke
   console.log(`🧹 Second Pass für heruntergefallene Blöcke...`);
-  await utils.sleep(1000);
+  await utils.sleep(2000);  // 50% SLOWER (1s→2s)
 
   for (let x = area.x1; x <= area.x2; x++) {
     if (!global.botState.isBuilding) return;
@@ -385,7 +378,7 @@ async function flattenArea(bot, area) {
 
         if (block && block.name !== 'air') {
           await blockUtils.safeSetBlockViaCommand(bot, pos, 'air');
-          await utils.sleep(10);
+          await utils.sleep(20);  // 50% SLOWER
         } else {
           break;
         }
@@ -396,7 +389,7 @@ async function flattenArea(bot, area) {
   console.log('✅ Geländevorbereitung abgeschlossen');
 }
 
-// ===== ROAD FUNCTIONS =====
+// ===== ROAD FUNCTIONS (50% SLOWER) =====
 async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDepth, centerX, centerZ, y) {
   const roadY = y;
   const doorX = buildingX + doorRel.dx;
@@ -461,7 +454,7 @@ async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDe
           await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x + 1, yv, z + 1), 'air');
           await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x + moveX, yv, z), 'air');
           await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x + moveX, yv, z + 1), 'air');
-          await utils.sleep(10);
+          await utils.sleep(20);  // 50% SLOWER
         }
       } else {
         const isHorizontal = moveX !== 0;
@@ -474,7 +467,7 @@ async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDe
           if (!global.botState.isBuilding) return;
           await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x, yv, z), 'air');
           await blockUtils.safeSetBlockViaCommand(bot, new Vec3(x + (isHorizontal ? 1 : 0), yv, z + (isHorizontal ? 0 : 1)), 'air');
-          await utils.sleep(10);
+          await utils.sleep(20);  // 50% SLOWER
         }
       }
 
@@ -509,7 +502,7 @@ async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDe
     }
 
     steps++;
-    await utils.sleep(24);
+    await utils.sleep(48);  // 50% SLOWER (24→48ms)
   }
 
   console.log(`✅ Straße komplett (${steps} Schritte)`);
@@ -647,7 +640,6 @@ module.exports = {
 
     await sendStatus(bot, `🏗️ Starte Dorfbau bei (${centerX}, ${centerY}, ${centerZ}) mit ${houseCount} Gebäuden`);
 
-    // ✅ DYNAMIC TEMPLATE LOADING
     const houses = loadAllTemplates();
     if (houses.length === 0) {
       await sendStatus(bot, '❌ Keine Templates gefunden!');
@@ -774,10 +766,10 @@ module.exports = {
 
             const blockPos = new Vec3(x + dx, y + layer.y, z + dz);
             await blockUtils.safeSetBlockViaCommand(bot, blockPos, materialName);
-            await utils.sleep(60);
+            await utils.sleep(90);  // 50% SLOWER (60→90ms)
             blocksPlaced++;
 
-            if (blocksPlaced % 15 === 0) {
+            if (blocksPlaced % 10 === 0) {  // Häufiger Mob-Check
               await attackNearbyMobs(bot);
             }
           }
@@ -798,7 +790,7 @@ module.exports = {
         doorPlaced = await blockUtils.placeDoor(bot, x, y, z, doorRel, doorMaterial, facing);
       } else {
         console.log(`⏳ Türrahmen noch nicht bereit (Versuch ${doorAttempt + 1}/3)`);
-        await utils.sleep(2000);
+        await utils.sleep(4000);  // 50% SLOWER (2s→4s)
       }
     }
 
