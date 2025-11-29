@@ -11,8 +11,8 @@ const movement = require('./movement');
 const terrain = require('./terrain');
 
 // CONSTANTS
-const ROAD_BLOCK = 'brick';
-const FILL_BLOCK = 'chiseled_stone_bricks';
+const ROAD_BLOCK = 'strone_bricks';
+const FILL_BLOCK = 'deepslate_tiles';
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 const DATA_DIR = './data';
 const BUILDINGS_DB_FILE = './data/buildings.json';
