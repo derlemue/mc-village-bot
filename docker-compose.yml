@@ -11,7 +11,7 @@ services:
       - ./data:/app/data
       - ./logs:/app/logs
       - ./bot/config:/app/config
-      - ./schematics:/app/schematics # **WICHTIG**, damit `require()` im Code 
+      - ./bot/schematics:/app/schematics # **WICHTIG**, damit `require()` im Code 
     user: "1000:1000"     # ✅ Docker-User fix
     restart: unless-stopped
     networks:
