@@ -10,6 +10,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./logs:/app/logs
+      - ./bot/config:/app/config
     user: "1000:1000"     # ✅ Docker-User fix
     restart: unless-stopped
     networks:
