@@ -1,4 +1,3 @@
-const { GoalNear } = require('mineflayer-pathfinder').goals;
 const Vec3 = require('vec3');
 const fs = require('fs');
 const path = require('path');
@@ -8,19 +7,13 @@ const housesConfig = require('../config/houses');
 const utils = require('./utils');
 const { saveState } = require('./persistence');
 const https = require('https');
+const movement = require('./movement');
+const terrain = require('./terrain');
 
-// FALLBACK CONSTANTS
-const BUILD_DELAY = 90;
-const ATTACK_RANGE = 8;
-const ATTACK_COOLDOWN = 1000;
-const ROAD_BLOCK = 'stone_bricks';
-const FILL_BLOCK =  'deepslate_tiles';
-const LANTERN_BLOCK = 'lantern';
-const LANTERN_BASE = 'stone_bricks';
-const AREA_PADDING = 10;
-const BUILD_SPACING = 10;
+// CONSTANTS
+const ROAD_BLOCK = 'brick';
+const FILL_BLOCK = 'chiseled_stone_bricks';
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
-const ROAD_AIR_HEIGHT = 4;
 const DATA_DIR = './data';
 const BUILDINGS_DB_FILE = './data/buildings.json';
 const VILLAGES_DB_FILE = './data/villages.json';
@@ -185,38 +178,6 @@ async function sendStatus(bot, message) {
   }
 }
 
-// ===== MOB FUNCTIONS =====
-async function attackNearbyMobs(bot) {
-  if (!bot.entity || !bot.entities) return false;
-  
-  const mobs = Object.values(bot.entities).filter(e =>
-    e.type === 'mob' &&
-    e.position.distanceTo(bot.entity.position) <= ATTACK_RANGE &&
-    e.position.distanceTo(bot.entity.position) > 0 &&
-    e.name !== 'villager' &&
-    e.name !== 'cat' &&
-    e.name !== 'iron_golem'
-  );
-
-  if (mobs.length === 0) return false;
-
-  mobs.sort((a, b) => a.position.distanceTo(bot.entity.position) - b.position.distanceTo(bot.entity.position));
-  const mob = mobs[0];
-  
-  if (!mob) return false;
-
-  try {
-    await bot.lookAt(mob.position.offset(0, mob.height / 2, 0));
-    bot.attack(mob);
-    console.log(`⚔️ Angriff auf Mob: ${mob.name} (${Math.round(mob.position.distanceTo(bot.entity.position))} Blöcke)`);
-    await utils.sleep(ATTACK_COOLDOWN);
-    return true;
-  } catch (e) {
-    console.log(`Mob-Angriff fehlgeschlagen: ${e.message}`);
-    return false;
-  }
-}
-
 // ===== HELPER FUNCTIONS =====
 function findDoorInPattern(pattern) {
   if (!pattern) return { dx: 0, dz: 0, dy: 0 };
@@ -276,8 +237,6 @@ async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDe
       return;
     }
 
-    await attackNearbyMobs(bot);
-
     const deltaX = Math.sign(centerX - x);
     const deltaZ = Math.sign(centerZ - z);
 
@@ -322,17 +281,14 @@ async function flattenArea(bot, area) {
     for (let z = area.z1; z <= area.z2; z++) {
       if (!global.botState.isBuilding) return;
 
-      // Fundament (3 Blöcke tief)
       for (let yv = area.y - 3; yv < area.y; yv++) {
         await bot.chat(`/setblock ${x} ${yv} ${z} ${FILL_BLOCK}`);
         await utils.sleep(20);
       }
 
-      // Boden
       await bot.chat(`/setblock ${x} ${area.y} ${z} ${FILL_BLOCK}`);
       await utils.sleep(20);
 
-      // Alles darüber entfernen (bis Y=130)
       for (let yv = area.y + 1; yv <= 130; yv++) {
         await bot.chat(`/setblock ${x} ${yv} ${z} air`);
         await utils.sleep(15);
@@ -354,15 +310,7 @@ function setupChatHandler(bot) {
     const msgLower = message.toLowerCase().trim();
 
     if (msgLower === '!help') {
-      bot.chat('🆘 Befehle: !explore | !build x y z N | !stop | !status | !help');
-      return;
-    }
-
-    if (msgLower === '!explore') {
-      global.botState.isExploring = true;
-      global.botState.isBuilding = false;
-      saveState(global.botState);
-      bot.chat('🧭 Starte Kartenerkundung');
+      bot.chat('🆘 Befehle: !build x y z N | !stop | !status | !help');
       return;
     }
 
@@ -375,7 +323,6 @@ function setupChatHandler(bot) {
         const N = parseInt(parts[4]);
         if (!isNaN(x) && !isNaN(y) && !isNaN(z) && !isNaN(N)) {
           global.botState.isBuilding = true;
-          global.botState.isExploring = false;
           global.botState.buildCoords = { x, y, z };
           global.botState.buildHouseCount = N;
           saveState(global.botState);
@@ -392,7 +339,6 @@ function setupChatHandler(bot) {
 
     if (msgLower === '!stop') {
       global.botState.isBuilding = false;
-      global.botState.isExploring = false;
       saveState(global.botState);
       bot.chat('⏹️ Alle Prozesse gestoppt');
       return;
@@ -402,8 +348,6 @@ function setupChatHandler(bot) {
       let statusMsg = '';
       if (global.botState.isBuilding) {
         statusMsg = `🏗️ BAUEND: Gebäude ${global.botState.buildIndex || 0}/${global.botState.buildHouseCount || '?'} bei (${global.botState.buildCoords?.x || '?'}, ${global.botState.buildCoords?.y || '?'}, ${global.botState.buildCoords?.z || '?'})`;
-      } else if (global.botState.isExploring) {
-        statusMsg = '🧭 ERKUNDUNG: Aktiv';
       } else {
         statusMsg = '⏸️ INAKTIV';
       }
@@ -432,6 +376,10 @@ module.exports = {
     const placements = this.planVillageLayout(centerX, centerY, centerZ, houseCount, houses);
     const villageId = registerOrUpdateVillage(centerX, centerY, centerZ, houseCount);
 
+    // ✨ Bewege Bot zum Zentrum
+    await movement.moveToPosition(bot, centerX, centerY + 2, centerZ, 5);
+    await utils.sleep(500);
+
     for (let i = global.botState.buildIndex || 0; i < placements.length; i++) {
       if (!global.botState.isBuilding) break;
 
@@ -444,6 +392,10 @@ module.exports = {
       const house = placement.house;
       
       console.log(`🏠 Baue ${house.name} bei (${placement.x}, ${centerY}, ${placement.z})`);
+      
+      // ✨ Bewege zur Baustelle mit Terrain-Handling
+      await movement.moveToBuildingSite(bot, { x: placement.x, z: placement.z, y: centerY });
+      await utils.sleep(500);
       
       const area = {
         x1: placement.x - 8, x2: placement.x + 8,
