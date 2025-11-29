@@ -61,7 +61,7 @@ async function clearTerrainColumn(bot, x, z, baseY) {
       try {
         await bot.chat(`/setblock ${x} ${yLevel} ${z} air`);
         console.log(`  ✓ Block auf (${x}, ${yLevel}, ${z}) entfernt`);
-        await utils.sleep(600); // 4x verlangsamt (150 * 4)
+        await utils.sleep(300); // 2x schneller (600 / 2)
       } catch (e) {
         console.warn(`  ⚠️ Fehler beim Abbau: ${e.message}`);
       }
