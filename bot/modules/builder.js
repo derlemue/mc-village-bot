@@ -31,18 +31,24 @@ function loadAllHouses() {
     allHouses.push(...housesFromJs);
   }
   
-  // 2. schematics/ Ordner laden
-  const schematicsDir = path.join(__dirname, '../config/schematics');
+  // 2. schematics/ Ordner laden (KORRIGIERTER PFAD)
+  const schematicsDir = path.join(__dirname, '../schematics');
+  console.log(`  🔍 Suche schematics-Ordner: ${schematicsDir}`);
+  
   if (fs.existsSync(schematicsDir)) {
     const schematicFiles = fs.readdirSync(schematicsDir)
       .filter(file => file.endsWith('.js'))
       .sort();
     
-    console.log(`  📁 schematics/: ${schematicFiles.length} Dateien`);
+    console.log(`  📁 schematics/: ${schematicFiles.length} Dateien gefunden`);
     
     schematicFiles.forEach(file => {
       try {
-        const schematicModule = require(path.join(schematicsDir, file));
+        const filePath = path.join(schematicsDir, file);
+        // Lösche Cache falls vorhanden (für Reload)
+        delete require.cache[require.resolve(filePath)];
+        
+        const schematicModule = require(filePath);
         const houses = schematicModule.villageHouses || [];
         console.log(`    ✅ ${file}: ${houses.length} Gebäude`);
         allHouses.push(...houses.filter(h => h && h.profession !== 'decoration'));
@@ -51,7 +57,7 @@ function loadAllHouses() {
       }
     });
   } else {
-    console.log('  ⏭️ schematics/ Ordner nicht gefunden');
+    console.warn(`  ⚠️ schematics/ Ordner nicht gefunden unter: ${schematicsDir}`);
   }
   
   console.log(`🎉 Gesamt: ${allHouses.length} Gebäude geladen`);
@@ -394,7 +400,7 @@ module.exports = {
 
     const houses = loadAllHouses();
     if (houses.length === 0) {
-      await sendStatus(bot, '❌ Keine Gebäude in houses.js gefunden!');
+      await sendStatus(bot, '❌ Keine Gebäude gefunden! Prüfe houses.js und schematics/');
       return;
     }
 
