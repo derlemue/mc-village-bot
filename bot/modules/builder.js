@@ -300,10 +300,10 @@ async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDe
   }
 }
 
-// ===== TERRAIN PREPARATION =====
+// ===== TERRAIN PREPARATION - Dynamische Flächenberechnung =====
 async function flattenArea(bot, area) {
-  const width = area.x2 - area.x1 + 1;
-  const depth = area.z2 - area.z1 + 1;
+  const width = area.x2 - area.x1;
+  const depth = area.z2 - area.z1;
   console.log(`🧹 Räume Bereich ${width}×${depth} bei Y=${area.y}...`);
 
   for (let x = area.x1; x <= area.x2; x++) {
@@ -444,6 +444,7 @@ module.exports = {
       await movement.moveToBuildingSite(bot, { x: placement.x, z: placement.z, y: centerY });
       await utils.sleep(1000);
       
+      // ✅ Nur EINE flattenArea - mit dynamischer Berechnung!
       await flattenArea(bot, clearArea);
 
       await this.buildStructure(bot, placement.x, centerY, placement.z, house);
