@@ -11,8 +11,9 @@ const movement = require('./movement');
 const terrain = require('./terrain');
 
 // CONSTANTS
-const ROAD_BLOCK = 'strone_bricks';
+const ROAD_BLOCK = 'stone_bricks'; // ✅ Fix: Tippfehler korrigiert
 const FILL_BLOCK = 'deepslate_tiles';
+const AREA_PADDING = 10; // ✅ NEU: 10 Blöcke Rand um jedes Gebäude
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 const DATA_DIR = './data';
 const BUILDINGS_DB_FILE = './data/buildings.json';
@@ -31,7 +32,7 @@ function loadAllHouses() {
     allHouses.push(...housesFromJs);
   }
   
-  // 2. schematics/ Ordner laden (KORRIGIERTER PFAD)
+  // 2. schematics/ Ordner laden
   const schematicsDir = path.join(__dirname, '../schematics');
   console.log(`  🔍 Suche schematics-Ordner: ${schematicsDir}`);
   
@@ -45,7 +46,6 @@ function loadAllHouses() {
     schematicFiles.forEach(file => {
       try {
         const filePath = path.join(schematicsDir, file);
-        // Lösche Cache falls vorhanden (für Reload)
         delete require.cache[require.resolve(filePath)];
         
         const schematicModule = require(filePath);
@@ -64,7 +64,7 @@ function loadAllHouses() {
   return allHouses;
 }
 
-// ===== DATABASE FUNCTIONS =====
+// ===== DATABASE FUNCTIONS ===== (unverändert)
 function ensureDataDir() {
   try {
     if (!fs.existsSync(DATA_DIR)) {
@@ -171,7 +171,7 @@ function registerOrUpdateVillage(centerX, centerY, centerZ, houseCount) {
   }
 }
 
-// ===== COMMUNICATION FUNCTIONS =====
+// ===== COMMUNICATION FUNCTIONS ===== (unverändert)
 async function sendStatus(bot, message) {
   console.log("SENDSTATUS:", message);
   if (bot && typeof bot.whisper === "function" && process.env.AUTHORIZED_USER)
@@ -248,7 +248,7 @@ function distance2D(x1, z1, x2, z2) {
   return Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
 }
 
-// ===== ROAD BUILDING (2x GESCHWINDIGKEIT) =====
+// ===== ROAD BUILDING ===== (unverändert)
 async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDepth, centerX, centerZ, y) {
   const roadY = y;
   const doorX = buildingX + doorRel.dx;
@@ -286,7 +286,7 @@ async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDe
     }
 
     steps++;
-    await utils.sleep(200); // 2x schneller (400 / 2)
+    await utils.sleep(200);
 
     if (steps % 10 === 0) {
       console.log(`🛣️ Straße: ${steps}/${MAX_STEPS} Schritte, Distanz: ${Math.round(distance2D(x, z, centerX, centerZ))}`);
@@ -314,15 +314,15 @@ async function flattenArea(bot, area) {
 
       for (let yv = area.y - 3; yv < area.y; yv++) {
         await bot.chat(`/setblock ${x} ${yv} ${z} ${FILL_BLOCK}`);
-        await utils.sleep(40); // 2x schneller (80 / 2)
+        await utils.sleep(40);
       }
 
       await bot.chat(`/setblock ${x} ${area.y} ${z} ${FILL_BLOCK}`);
-      await utils.sleep(40); // 2x schneller (80 / 2)
+      await utils.sleep(40);
 
       for (let yv = area.y + 1; yv <= 130; yv++) {
         await bot.chat(`/setblock ${x} ${yv} ${z} air`);
-        await utils.sleep(30); // 2x schneller (60 / 2)
+        await utils.sleep(30);
       }
     }
   }
@@ -330,7 +330,7 @@ async function flattenArea(bot, area) {
   console.log('✅ Gelände vorbereitet');
 }
 
-// ===== CHAT HANDLER =====
+// ===== CHAT HANDLER ===== (unverändert)
 function setupChatHandler(bot) {
   bot.on('chat', (username, message) => {
     if (username === bot.username) return;
@@ -390,7 +390,7 @@ function setupChatHandler(bot) {
   console.log('✅ Chat-Handler eingerichtet');
 }
 
-// ===== MAIN FUNCTIONS =====
+// ===== MAIN FUNCTIONS mit DYNAMISCHER RÄUMFLÄCHE! =====
 module.exports = {
   setupChatHandler,
 
@@ -409,31 +409,40 @@ module.exports = {
 
     // Bewege Bot zum Zentrum
     await movement.moveToPosition(bot, centerX, centerY + 2, centerZ, 5);
-    await utils.sleep(1000); // 2x schneller (2000 / 2)
+    await utils.sleep(1000);
 
     for (let i = global.botState.buildIndex || 0; i < placements.length; i++) {
       if (!global.botState.isBuilding) break;
 
+      const placement = placements[i];
+      const house = placement.house;
+      
       if (isBuildingFinished(villageId, i)) {
         console.log(`⏭️ Gebäude ${i + 1}/${placements.length} übersprungen`);
         continue;
       }
 
-      const placement = placements[i];
-      const house = placement.house;
+      console.log(`🏠 Baue ${house.name} (${house.width}x${house.depth}) bei (${placement.x}, ${centerY}, ${placement.z})`);
       
-      console.log(`🏠 Baue ${house.name} bei (${placement.x}, ${centerY}, ${placement.z})`);
-      
-      // Bewege zur Baustelle mit Terrain-Handling
-      await movement.moveToBuildingSite(bot, { x: placement.x, z: placement.z, y: centerY });
-      await utils.sleep(1000); // 2x schneller (2000 / 2)
-      
-      const area = {
-        x1: placement.x - 8, x2: placement.x + 8,
-        z1: placement.z - 8, z2: placement.z + 8,
+      // ✅ DYNAMISCHE RÄUMFLÄCHE IMPLEMENTIERT!
+      const halfWidth = Math.floor(house.width / 2);
+      const halfDepth = Math.floor(house.depth / 2);
+      const clearArea = {
+        x1: placement.x - halfWidth - AREA_PADDING,
+        x2: placement.x + halfWidth + AREA_PADDING,
+        z1: placement.z - halfDepth - AREA_PADDING,
+        z2: placement.z + halfDepth + AREA_PADDING,
         y: centerY
       };
-      await flattenArea(bot, area);
+      
+      console.log(`🧹 Räume Bereich ${(clearArea.x2-clearArea.x1+1)}×${(clearArea.z2-clearArea.z1+1)} bei Y=${centerY}...`);
+      
+      // Bewege zur Baustelle
+      await movement.moveToBuildingSite(bot, { x: placement.x, z: placement.z, y: centerY });
+      await utils.sleep(1000);
+      
+      // ✅ DYNAMISCHES FLATTEN!
+      await flattenArea(bot, clearArea);
 
       await this.buildStructure(bot, placement.x, centerY, placement.z, house);
 
@@ -450,8 +459,8 @@ module.exports = {
       global.botState.buildIndex = i + 1;
       saveState(global.botState);
       
-      await sendStatus(bot, `✅ Gebäude ${i + 1}/${placements.length} fertig: ${house.name}`);
-      await utils.sleep(4000); // 2x schneller (8000 / 2)
+      await sendStatus(bot, `✅ Gebäude ${i + 1}/${placements.length} fertig: ${house.name} (${house.width}x${house.depth})`);
+      await utils.sleep(4000);
     }
 
     await sendStatus(bot, '🎉 Dorfbau komplett!');
@@ -496,6 +505,9 @@ module.exports = {
       return false;
     }
 
+    const halfWidth = Math.floor(houseConfig.width / 2);
+    const halfDepth = Math.floor(houseConfig.depth / 2);
+
     for (const layer of houseConfig.pattern) {
       if (!layer.blocks || !Array.isArray(layer.blocks)) continue;
       
@@ -505,13 +517,17 @@ module.exports = {
         
         for (let dx = 0; dx < row.length; dx++) {
           const symbol = row[dx];
-          if (symbol === '.' || symbol === 'd') continue;
+          if (symbol === '.') continue;
           
           const material = houseConfig.materials[symbol];
           if (material) {
-            const pos = new Vec3(x + dx, y + (layer.y || 0), z + dz);
+            const pos = new Vec3(
+              x + dx - halfWidth, 
+              y + (layer.y || 0), 
+              z + dz - halfDepth
+            );
             await bot.chat(`/setblock ${Math.floor(pos.x)} ${Math.floor(pos.y)} ${Math.floor(pos.z)} ${material}`);
-            await utils.sleep(200); // 2x schneller (400 / 2)
+            await utils.sleep(200);
           }
         }
       }
