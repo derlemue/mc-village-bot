@@ -11,9 +11,9 @@ const movement = require('./movement');
 const terrain = require('./terrain');
 
 // CONSTANTS
-const ROAD_BLOCK = 'stone_bricks'; // ✅ Fix: Tippfehler korrigiert
+const ROAD_BLOCK = 'stone_bricks';
 const FILL_BLOCK = 'deepslate_tiles';
-const AREA_PADDING = 10; // ✅ NEU: 10 Blöcke Rand um jedes Gebäude
+const AREA_PADDING = 10; // ✅ 10 Blöcke Rand um jedes Gebäude
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 const DATA_DIR = './data';
 const BUILDINGS_DB_FILE = './data/buildings.json';
@@ -64,7 +64,7 @@ function loadAllHouses() {
   return allHouses;
 }
 
-// ===== DATABASE FUNCTIONS ===== (unverändert)
+// ===== DATABASE FUNCTIONS =====
 function ensureDataDir() {
   try {
     if (!fs.existsSync(DATA_DIR)) {
@@ -171,7 +171,7 @@ function registerOrUpdateVillage(centerX, centerY, centerZ, houseCount) {
   }
 }
 
-// ===== COMMUNICATION FUNCTIONS ===== (unverändert)
+// ===== COMMUNICATION FUNCTIONS =====
 async function sendStatus(bot, message) {
   console.log("SENDSTATUS:", message);
   if (bot && typeof bot.whisper === "function" && process.env.AUTHORIZED_USER)
@@ -248,7 +248,7 @@ function distance2D(x1, z1, x2, z2) {
   return Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
 }
 
-// ===== ROAD BUILDING ===== (unverändert)
+// ===== ROAD BUILDING =====
 async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDepth, centerX, centerZ, y) {
   const roadY = y;
   const doorX = buildingX + doorRel.dx;
@@ -300,7 +300,7 @@ async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDe
   }
 }
 
-// ===== TERRAIN PREPARATION (2x GESCHWINDIGKEIT) =====
+// ===== TERRAIN PREPARATION =====
 async function flattenArea(bot, area) {
   const width = area.x2 - area.x1 + 1;
   const depth = area.z2 - area.z1 + 1;
@@ -330,7 +330,7 @@ async function flattenArea(bot, area) {
   console.log('✅ Gelände vorbereitet');
 }
 
-// ===== CHAT HANDLER ===== (unverändert)
+// ===== CHAT HANDLER =====
 function setupChatHandler(bot) {
   bot.on('chat', (username, message) => {
     if (username === bot.username) return;
@@ -424,9 +424,12 @@ module.exports = {
 
       console.log(`🏠 Baue ${house.name} (${house.width}x${house.depth}) bei (${placement.x}, ${centerY}, ${placement.z})`);
       
-      // ✅ DYNAMISCHE RÄUMFLÄCHE IMPLEMENTIERT!
+      // ✅ GEFIXTE DYNAMISCHE RÄUMFLÄCHE - EXAKT!
+      const clearWidth = house.width + (AREA_PADDING * 2);
+      const clearDepth = house.depth + (AREA_PADDING * 2);
       const halfWidth = Math.floor(house.width / 2);
       const halfDepth = Math.floor(house.depth / 2);
+      
       const clearArea = {
         x1: placement.x - halfWidth - AREA_PADDING,
         x2: placement.x + halfWidth + AREA_PADDING,
@@ -435,18 +438,18 @@ module.exports = {
         y: centerY
       };
       
-      console.log(`🧹 Räume Bereich ${(clearArea.x2-clearArea.x1+1)}×${(clearArea.z2-clearArea.z1+1)} bei Y=${centerY}...`);
+      console.log(`🧹 Räume Bereich ${clearWidth}×${clearDepth} bei Y=${centerY}...`);
       
       // Bewege zur Baustelle
       await movement.moveToBuildingSite(bot, { x: placement.x, z: placement.z, y: centerY });
       await utils.sleep(1000);
       
-      // ✅ DYNAMISCHES FLATTEN!
       await flattenArea(bot, clearArea);
 
       await this.buildStructure(bot, placement.x, centerY, placement.z, house);
 
       const doorRel = findDoorInPattern(house.pattern);
+
       await buildRoad(bot, placement.x, placement.z, doorRel, 
                      house.width || 7, house.depth || 7, 
                      centerX, centerZ, centerY);

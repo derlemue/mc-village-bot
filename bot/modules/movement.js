@@ -14,9 +14,8 @@ const terrain = require('./terrain');
  */
 async function moveToPosition(bot, x, y, z, maxDistance = 2) {
   console.log(`🚶 Bewege Bot zu (${x}, ${y}, ${z})`);
-  
   const goal = new GoalNear(x, y, z, maxDistance);
-  
+
   try {
     // Versuche normalen Pathfinding
     await bot.pathfinder.goto(goal);
@@ -25,10 +24,10 @@ async function moveToPosition(bot, x, y, z, maxDistance = 2) {
   } catch (err) {
     console.warn(`⚠️ Pathfinding fehlgeschlagen: ${err.message}`);
     console.log(`🔨 Starte Terrain-Abbau zur Position...`);
-    
+
     // Wenn Pathfinding fehlschlägt: Terrain-Abbau
     await clearPathToPosition(bot, x, y, z);
-    
+
     // Neuer Versuch
     try {
       await bot.pathfinder.goto(goal);
@@ -51,7 +50,7 @@ async function moveToPosition(bot, x, y, z, maxDistance = 2) {
 async function clearPathToPosition(bot, targetX, targetY, targetZ) {
   const botPos = bot.entity.position;
   const steps = Math.ceil(botPos.distanceTo(new Vec3(targetX, targetY, targetZ)));
-  
+
   console.log(`🔨 Räume Weg über ~${steps} Blöcke...`);
 
   // Berechne Richtung
@@ -62,10 +61,9 @@ async function clearPathToPosition(bot, targetX, targetY, targetZ) {
   for (let step = 0; step < steps && global.botState.isBuilding; step++) {
     const checkX = Math.floor(botPos.x + dx * (step + 1));
     const checkZ = Math.floor(botPos.z + dz * (step + 1));
-    
+
     // Räume Terrain ab diesem Punkt
     await terrain.clearTerrainColumn(bot, checkX, checkZ, targetY);
-    
     await utils.sleep(400); // 2x schneller (800 / 2)
   }
 
@@ -74,15 +72,18 @@ async function clearPathToPosition(bot, targetX, targetY, targetZ) {
 
 /**
  * Bewegt Bot zur Baustelle eines Gebäudes
+ * ✅ WICHTIG: Ruft NICHT flattenArea auf!
+ *    Das wird bereits in builder.buildVillage() aufgerufen
  * @param {Object} bot - Mineflayer Bot
- * @param {Object} placement - Gebäude-Platzierung {x, y, z, house}
+ * @param {Object} buildingSite - Baustellen-Koordinaten {x, y, z, house}
  */
-async function moveToBuildingSite(bot, placement) {
-  const { x, z, y } = placement;
+async function moveToBuildingSite(bot, buildingSite) {
+  const { x, z, y } = buildingSite;
   const buildingY = y + 2;
-  
+
   console.log(`🏗️ Bewege zu Baustelle: (${x}, ${buildingY}, ${z})`);
   
+  // ✅ Nur Bewegung, KEINE Terrain-Vorbereitung hier!
   return await moveToPosition(bot, x, buildingY, z, 3);
 }
 
@@ -99,19 +100,33 @@ async function moveToBuiltDoor(bot, buildingX, buildingY, buildingZ, doorRel, fa
   const doorX = buildingX + doorRel.dx;
   const doorY = buildingY + doorRel.dy + 1;
   const doorZ = buildingZ + doorRel.dz;
-  
+
   // Position vor der Tür (je nach Richtung)
   let botX, botZ;
+
   switch (facing) {
-    case 'north': botX = doorX; botZ = doorZ + 3; break;
-    case 'south': botX = doorX; botZ = doorZ - 3; break;
-    case 'east': botX = doorX - 3; botZ = doorZ; break;
-    case 'west': botX = doorX + 3; botZ = doorZ; break;
-    default: botX = doorX; botZ = doorZ + 3;
+    case 'north':
+      botX = doorX;
+      botZ = doorZ + 3;
+      break;
+    case 'south':
+      botX = doorX;
+      botZ = doorZ - 3;
+      break;
+    case 'east':
+      botX = doorX - 3;
+      botZ = doorZ;
+      break;
+    case 'west':
+      botX = doorX + 3;
+      botZ = doorZ;
+      break;
+    default:
+      botX = doorX;
+      botZ = doorZ + 3;
   }
 
   console.log(`🚪 Bewege zur Tür bei (${doorX}, ${doorY}, ${doorZ})`);
-  
   return await moveToPosition(bot, botX, doorY, botZ, 1);
 }
 

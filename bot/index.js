@@ -36,6 +36,7 @@ function loadState() {
   } catch (e) {
     console.error('Fehler beim Laden von botState.json:', e.message);
   }
+
   return null;
 }
 
@@ -47,10 +48,10 @@ function saveTokenToFile(accessToken, refreshToken = null) {
       accessToken,
       refreshToken,
       savedAt: Date.now(),
-      expiresAt: Date.now() + (3600 * 1000) // 1 Stunde Gültigkeit
+      expiresAt: Date.now() + (24 * 3600 * 1000) // ✅ 24 Stunden Gültigkeit (Microsoft Azure tokens)
     };
     fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokenData, null, 2));
-    console.log('✅ Token gespeichert');
+    console.log(`✅ Token gespeichert (gültig für 24h)`);
   } catch (e) {
     console.error('Fehler beim Speichern des Tokens:', e.message);
   }
@@ -65,21 +66,22 @@ function loadTokenFromFile() {
   } catch (e) {
     console.warn('Fehler beim Laden des Tokens:', e.message);
   }
+
   return null;
 }
 
 function isTokenValid(tokenData) {
   if (!tokenData || !tokenData.accessToken) return false;
   if (!tokenData.expiresAt) return false;
-  
+
   const now = Date.now();
   const isExpired = now > tokenData.expiresAt;
-  
+
   if (isExpired) {
     console.warn('⚠️ Token ist abgelaufen. Neuer Login erforderlich.');
     return false;
   }
-  
+
   console.log('✅ Token ist noch gültig');
   return true;
 }
@@ -89,6 +91,7 @@ if (global.__VILLAGE_BOT_RUNNING__) {
   console.log('⚠️ index.js bereits geladen, zweiten Start im selben Prozess abgebrochen');
   return;
 }
+
 global.__VILLAGE_BOT_RUNNING__ = true;
 
 // --- Token-Validierung vor Bot-Start ---
@@ -100,7 +103,7 @@ const savedTokenData = loadTokenFromFile();
 if (savedTokenData && isTokenValid(savedTokenData)) {
   accessToken = savedTokenData.accessToken;
   refreshToken = savedTokenData.refreshToken;
-  console.log('🔑 Verwende gespeicherten Token');
+  console.log('🔑 Verwende gespeicherten Token (persistent über Builds)');
 } else if (!accessToken) {
   console.error('❌ Kein Token vorhanden und kein gültiger Token gespeichert!');
   console.error('Bitte setze MC_TOKEN in .env oder führe neuen Login durch');
@@ -126,6 +129,7 @@ console.log('🤖 Minecraft Village Builder Bot startet...');
 console.log(`📡 Verbinde mit ${config.host}:${config.port} als ${config.username}`);
 
 const bot = mineflayer.createBot(config);
+
 bot.loadPlugin(pathfinder);
 
 global.botState = loadState() || {
@@ -149,12 +153,10 @@ bot.once('spawn', async () => {
   const mcData = require('minecraft-data')(bot.version);
   const MovementsClass = require('mineflayer-pathfinder').Movements;
   const movements = new MovementsClass(bot, mcData);
-
   movements.scafoldingBlocks = [];
   movements.allow1by1towers = false;
   movements.canDig = false;
   movements.allowFreeMotion = true;
-
   bot.pathfinder.setMovements(movements);
 
   builder.setupChatHandler(bot);
@@ -178,6 +180,7 @@ bot.once('spawn', async () => {
 bot.on('end', (reason) => {
   console.log(`\n⚠️ Bot-Verbindung beendet: ${reason}`);
   console.log('🔄 Starte Neuverbindung in 10 Sekunden...\n');
+
   setTimeout(() => {
     process.exit(1);
   }, 10000);
@@ -185,7 +188,7 @@ bot.on('end', (reason) => {
 
 bot.on('error', (err) => {
   console.error('❌ Bot-Fehler:', err);
-  
+
   // Token-spezifische Fehlerbehandlung
   if (err.message && err.message.includes('Invalid access token')) {
     console.error('🔑 Access Token ungültig - bitte neu anmelden');
@@ -196,12 +199,12 @@ bot.on('error', (err) => {
   }
 });
 
-// Periodische Token-Aktualisierung (alle 55 Minuten)
+// Periodische Token-Aktualisierung (alle 23 Stunden)
 setInterval(() => {
   const tokenData = loadTokenFromFile();
   if (tokenData && !isTokenValid(tokenData)) {
     console.warn('⏰ Token läuft bald ab - bitte neu anmelden');
   }
-}, 55 * 60 * 1000);
+}, 23 * 60 * 60 * 1000);
 
 console.log('✅ Bot-Prozess gestartet');
