@@ -9,12 +9,12 @@ const utils = require('./utils');
 const { saveState } = require('./persistence');
 const https = require('https');
 
-// FALLBACK CONSTANTS (da constants.js fehlt)
+// FALLBACK CONSTANTS
 const BUILD_DELAY = 90;
 const ATTACK_RANGE = 8;
 const ATTACK_COOLDOWN = 1000;
-const ROAD_BLOCK = 'stone_bricks';
-const FILL_BLOCK = 'deepslate_tiles';
+const ROAD_BLOCK = 'brick';
+const FILL_BLOCK = 'chiseled_stone_bricks';
 const LANTERN_BLOCK = 'lantern';
 const LANTERN_BASE = 'stone_bricks';
 const AREA_PADDING = 10;
@@ -25,38 +25,19 @@ const DATA_DIR = './data';
 const BUILDINGS_DB_FILE = './data/buildings.json';
 const VILLAGES_DB_FILE = './data/villages.json';
 
-// ===== MULTI-TEMPLATE LOADER =====
-function loadAllTemplates() {
-  const templatesDir = path.join(__dirname, '../config/templates');
-  const allHouses = [];
+// ===== LOAD HOUSES FROM houses.js =====
+function loadAllHouses() {
+  console.log('📦 Lade Gebäude von houses.js...');
   
-  if (!fs.existsSync(templatesDir)) {
-    console.warn('⚠️ templates/ Verzeichnis nicht gefunden - fallback zu houses.js');
-    if (housesConfig && housesConfig.villageHouses) {
-      return housesConfig.villageHouses.filter(h => h.profession !== 'decoration');
-    }
+  if (!housesConfig || !housesConfig.villageHouses) {
+    console.error('❌ houses.js hat keine villageHouses!');
     return [];
   }
 
-  const templateFiles = fs.readdirSync(templatesDir)
-    .filter(file => file.endsWith('.js'))
-    .sort();
-
-  console.log(`📁 Lade ${templateFiles.length} Template-Dateien:`);
+  const houses = housesConfig.villageHouses.filter(h => h && h.profession !== 'decoration');
+  console.log(`🎉 ${houses.length} Gebäude geladen`);
   
-  templateFiles.forEach(file => {
-    try {
-      const templateModule = require(path.join(templatesDir, file));
-      const houses = templateModule.villageHouses || [];
-      console.log(`  ✅ ${file}: ${houses.length} Häuser`);
-      allHouses.push(...houses);
-    } catch (e) {
-      console.error(`❌ Fehler bei ${file}:`, e.message);
-    }
-  });
-
-  console.log(`🎉 Gesamt: ${allHouses.length} verfügbare Gebäude`);
-  return allHouses.filter(h => h.profession !== 'decoration');
+  return houses;
 }
 
 // ===== DATABASE FUNCTIONS =====
@@ -275,7 +256,7 @@ function distance2D(x1, z1, x2, z2) {
   return Math.sqrt((x2 - x1) ** 2 + (z2 - z1) ** 2);
 }
 
-// ===== FIXED ROAD BUILDING (MAX 100 STEPS) =====
+// ===== ROAD BUILDING =====
 async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDepth, centerX, centerZ, y) {
   const roadY = y;
   const doorX = buildingX + doorRel.dx;
@@ -287,7 +268,7 @@ async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDe
   let x = doorX;
   let z = doorZ;
   let steps = 0;
-  const MAX_STEPS = 100; // 🛑 ENDLOSSCHLEIFE FIX
+  const MAX_STEPS = 100;
 
   while (distance2D(x, z, centerX, centerZ) > 1 && steps < MAX_STEPS) {
     if (!global.botState.isBuilding) {
@@ -297,22 +278,18 @@ async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDe
 
     await attackNearbyMobs(bot);
 
-    // Einfache Manhattan-Bewegung zum Zentrum
     const deltaX = Math.sign(centerX - x);
     const deltaZ = Math.sign(centerZ - z);
 
-    // Priorisiere X oder Z Bewegung (keine Diagonalen mehr)
     if (Math.abs(centerX - x) > Math.abs(centerZ - z)) {
       x += deltaX;
     } else {
       z += deltaZ;
     }
 
-    // 2 Blöcke breit Straße
     await bot.chat(`/setblock ${Math.floor(x)} ${roadY} ${Math.floor(z)} ${ROAD_BLOCK}`);
     await bot.chat(`/setblock ${Math.floor(x+1)} ${roadY} ${Math.floor(z)} ${ROAD_BLOCK}`);
     
-    // 4 Blöcke Luft darüber
     for (let yv = roadY + 1; yv <= roadY + 4; yv++) {
       await bot.chat(`/setblock ${Math.floor(x)} ${yv} ${Math.floor(z)} air`);
       await bot.chat(`/setblock ${Math.floor(x+1)} ${yv} ${Math.floor(z)} air`);
@@ -333,13 +310,12 @@ async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDe
   }
 }
 
-// ===== FIXED TERRAIN PREP (NUR EINMAL PRO GEBÄUDE) =====
+// ===== TERRAIN PREPARATION =====
 async function flattenArea(bot, area) {
   const width = area.x2 - area.x1 + 1;
   const depth = area.z2 - area.z1 + 1;
   console.log(`🧹 Räume Bereich ${width}×${depth} bei Y=${area.y}...`);
 
-  // Einfache Flachmachung - KEINE CHUNKS (vereinfacht)
   for (let x = area.x1; x <= area.x2; x++) {
     if (!global.botState.isBuilding) return;
     
@@ -447,9 +423,9 @@ module.exports = {
     console.log(`🏗️ Starte Dorfbau bei (${centerX}, ${centerY}, ${centerZ}) mit ${houseCount} Gebäuden`);
     await sendStatus(bot, `🏗️ Dorfbau gestartet: ${houseCount} Gebäude`);
 
-    const houses = loadAllTemplates();
+    const houses = loadAllHouses();
     if (houses.length === 0) {
-      await sendStatus(bot, '❌ Keine Templates gefunden!');
+      await sendStatus(bot, '❌ Keine Gebäude in houses.js gefunden!');
       return;
     }
 
@@ -469,7 +445,6 @@ module.exports = {
       
       console.log(`🏠 Baue ${house.name} bei (${placement.x}, ${centerY}, ${placement.z})`);
       
-      // 1. Gelände FLAT (NUR EINMAL)
       const area = {
         x1: placement.x - 8, x2: placement.x + 8,
         z1: placement.z - 8, z2: placement.z + 8,
@@ -477,16 +452,13 @@ module.exports = {
       };
       await flattenArea(bot, area);
 
-      // 2. Gebäude BAUEN
       await this.buildStructure(bot, placement.x, centerY, placement.z, house);
 
-      // 3. Straße (FIXED - MAX 100 Schritte)
       const doorRel = findDoorInPattern(house.pattern);
       await buildRoad(bot, placement.x, placement.z, doorRel, 
                      house.width || 7, house.depth || 7, 
                      centerX, centerZ, centerY);
 
-      // 4. Als fertig markieren
       markBuildingAsFinished(villageId, i, placement, doorRel, {
         width: house.width || 7, 
         depth: house.depth || 7
@@ -496,7 +468,7 @@ module.exports = {
       saveState(global.botState);
       
       await sendStatus(bot, `✅ Gebäude ${i + 1}/${placements.length} fertig: ${house.name}`);
-      await utils.sleep(2000); // Pause zwischen Gebäuden
+      await utils.sleep(2000);
     }
 
     await sendStatus(bot, '🎉 Dorfbau komplett!');
@@ -515,7 +487,6 @@ module.exports = {
       const x = Math.floor(centerX + distance * Math.cos(angle));
       const z = Math.floor(centerZ + distance * Math.sin(angle));
       
-      // Einfacher Abstand-Check
       let tooClose = false;
       for (const p of placements) {
         if (Math.hypot(x - p.x, z - p.z) < 20) {
@@ -537,7 +508,6 @@ module.exports = {
   async buildStructure(bot, x, y, z, houseConfig) {
     console.log(`🔨 Baue ${houseConfig.name}`);
     
-    // Baue Layer für Layer
     if (!Array.isArray(houseConfig.pattern)) {
       console.warn('❌ Ungültiges Pattern-Format');
       return false;
