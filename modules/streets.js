@@ -38,11 +38,9 @@ class StreetBuilder {
   async buildStreetToBuilding(buildY, fromBuilding, toBuilding) {
     console.log('[StreetBuilder] 🛣️ Baue Straße zwischen:', fromBuilding.name, '→', toBuilding.name);
     
-    // ✅ TRIPPEL-SCHUTZ für doorPos
     const fromDoorPos = fromBuilding.doorPos || { x: 8, z: 0 };
     const toDoorPos = toBuilding.doorPos || { x: 8, z: 0 };
     
-    // ✅ EXTRA SCHUTZ für width
     const fromWidth = fromBuilding.width || 16;
     const toWidth = toBuilding.width || 16;
     
@@ -51,13 +49,13 @@ class StreetBuilder {
     const toX = toBuilding.x + toDoorPos.x;
     const toZ = toBuilding.z + toDoorPos.z;
 
-    console.log(`[StreetBuilder] 📍 Von (${fromX},${fromZ}) nach (${toX},${toZ})`);
-    await this._buildPath(buildY, fromX, fromZ, toX, toZ);
+    console.log(`[StreetBuilder] 🛣️ Straße y=${buildY+1} von (${fromX},${fromZ}) nach (${toX},${toZ})`);
+    await this._buildPath(buildY + 1, fromX, fromZ, toX, toZ);  // Y+1!
 
     this.streets.push({
       from: { name: fromBuilding.name || 'unknown', x: fromX, z: fromZ },
       to: { name: toBuilding.name || 'unknown', x: toX, z: toZ },
-      buildY, timestamp: new Date().toISOString()
+      buildY: buildY + 1, timestamp: new Date().toISOString()
     });
     this.saveStreets();
   }
@@ -66,7 +64,7 @@ class StreetBuilder {
     const dx = x2 - x1, dz = z2 - z1;
     const isDiagonal = Math.abs(dx) > 0 && Math.abs(dz) > 0;
     
-    console.log(`[StreetBuilder] 🛣️ ${isDiagonal ? 'DIAGONAL 4 breit' : 'GERAD 3 breit'}`);
+    console.log(`[StreetBuilder] 🛣️ ${isDiagonal ? 'DIAGONAL' : 'GERAD'} y=${buildY}`);
     
     const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
     for (let step = 0; step <= totalSteps; step++) {
@@ -78,7 +76,8 @@ class StreetBuilder {
         [[-1,-1],[-1,0],[-1,1],[0,-1],[0,0],[0,1],[1,-1],[1,0],[1,1]] :
         [[-1,0],[0,-1],[0,0],[0,1],[1,0]];
       
-      for (const [ox, oz] of offsets) {
+      for (const offset of offsets) {
+        const ox = offset[0], oz = offset[1];
         this.bot.chat(`/setblock ${currentX+ox} ${buildY} ${currentZ+oz} stone_bricks`);
         await new Promise(r => setTimeout(r, 15));
       }
@@ -87,7 +86,7 @@ class StreetBuilder {
   }
 
   async buildLanternPosts(buildY, building) {
-    console.log(`[StreetBuilder] 💡 ${building.name || 'Gebäude'} Laternen`);
+    console.log(`[StreetBuilder] 💡 ${building.name || 'Gebäude'} Laternen y=${buildY+1}`);
     const width = building.width || 16;
     const depth = building.depth || 16;
     const interval = 6, offset = 1;
@@ -96,17 +95,17 @@ class StreetBuilder {
 
     const positions = [];
     for (let x = minX; x <= maxX; x += interval) {
-      positions.push({x, z: minZ}, {x, z: maxZ});
+      positions.push({x: x, z: minZ}, {x: x, z: maxZ});
     }
     for (let z = minZ; z <= maxZ; z += interval) {
-      positions.push({x: minX, z}, {x: maxX, z});
+      positions.push({x: minX, z: z}, {x: maxX, z: z});
     }
 
     const seen = new Set();
     for (const pos of positions) {
       const key = `${pos.x},${pos.z}`;
       if (!seen.has(key)) {
-        await this._placeLantern(buildY, pos.x, pos.z);
+        await this._placeLantern(buildY + 1, pos.x, pos.z);  // Y+1!
         seen.add(key);
       }
     }
@@ -115,7 +114,7 @@ class StreetBuilder {
   async _placeLantern(buildY, x, z) {
     this.bot.chat(`/setblock ${x} ${buildY} ${z} stone_bricks`);
     await new Promise(r => setTimeout(r, 50));
-    this.bot.chat(`/setblock ${x} ${buildY+1} ${z} lantern`);
+    this.bot.chat(`/setblock ${x} ${buildY+1} ${z} lantern`);  // Laterne Y+2!
     await new Promise(r => setTimeout(r, 50));
   }
 }
