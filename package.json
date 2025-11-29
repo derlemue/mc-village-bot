@@ -1,0 +1,16 @@
+{
+  "name": "mc-village-bot",
+  "version": "2.0.0",
+  "description": "Minecraft Village Builder Bot",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "mineflayer": "^4.20.2",
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

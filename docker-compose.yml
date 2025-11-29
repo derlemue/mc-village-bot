@@ -1,27 +1,16 @@
 services:
-  village-bot:
-    build: ./bot
+  minecraft-village-bot:
+    build: .
     container_name: minecraft-village-bot
-    env_file:
-      - .env
+    restart: unless-stopped
     environment:
-      - NODE_ENV=production
-      - TZ=Europe/Berlin
+      - MC_HOST=46.224.3.29
+      - MC_PORT=25565
+      - MC_USERNAME=cr4zy_chicken
+      - MC_VERSION=1.20.1
     volumes:
       - ./data:/app/data
-      - ./logs:/app/logs
-      - ./bot/config:/app/config
-      - ./bot/schematics:/app/schematics # **WICHTIG**, damit `require()` im Code 
-    user: "1000:1000"     # ✅ Docker-User fix
-    restart: unless-stopped
-    networks:
-      - minecraft-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-networks:
-  minecraft-network:
-    driver: bridge
+      - ./schematics:/app/schematics:ro
+      - ./.env:/app/.env:ro  # ← .env mounten!
+    stdin_open: true
+    tty: true

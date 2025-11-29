@@ -117,34 +117,27 @@ npm run dev
 ### Projektstruktur
 ```
 minecraft-village-bot/
-├── docker-compose.yml     # Docker Konfiguration
-├── Dockerfile             # Container-Image
-├── package.json           # Node.js Dependencies
-├── .env                   # Umgebungsvariablen (NICHT ins Git!)
-├── .env.example           # Template für .env
-├── README.md              # Diese Datei
+├── modules/
+│   ├── builder.js          ✅ (mit BulkTerrain Integration)
+│   ├── bulkTerrain.js      ⭐ NEU - Multi-Threading Terrain
+│   ├── chunkLoader.js
+│   ├── blockUtils.js
+│   ├── utils.js
+│   └── persistence.js
 │
-├── config/                # Konfiguration & Vorlagen
-│   ├── houses.js          # Hausdefinitionen
-│   ├── villageLayout.js   # Dorf-Layout-Logik
-│   └── templates/         # Bauvorlagen
-│       ├── farmer.js      # Bauernhaus-Vorlage
-│       ├── weaponsmith.js # Waffenschmied-Vorlage
-│       └── lighthouse.js  # Leuchtturm-Vorlage
+├── workers/                ⭐ NEU - Worker-Threads
+│   ├── terrainCalculator.js
+│   └── blockBatcher.js
 │
-├── modules/               # Kernmodule
-│   ├── builder.js         # Bau-Logik & Orchestration
-│   ├── chunkLoader.js     # Chunk Management
-│   ├── blockUtils.js      # Block-Operationen
-│   ├── utils.js           # Hilfsfunktionen
-│   └── persistence.js     # JSON-Datenhaltung
+├── config/
+│   ├── terrainConfig.js    ⭐ NEU - Terrain-Konfiguration
+│   ├── villageLayout.js
+│   └── houses.js
 │
-├── data/                  # Datenpersistenz (generiert)
-│   ├── buildings.json     # Bauhistorie
-│   ├── villages.json      # Dorf-Daten
-│   └── token.json         # Auth-Token
-│
-└── index.js               # Start- & Hauptlogik
+├── data/
+├── index.js
+├── package.json            ✅ (Dependencies OK)
+└── README.md
 ```
 
 ### Wichtige Konfigurationsdateien
