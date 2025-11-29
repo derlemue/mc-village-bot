@@ -11,8 +11,8 @@ const movement = require('./movement');
 const terrain = require('./terrain');
 
 // CONSTANTS
-const ROAD_BLOCK = 'stone_bricks';
-const FILL_BLOCK = 'deepslate_tiles';
+const ROAD_BLOCK = 'brick';
+const FILL_BLOCK = 'chiseled_stone_bricks';
 const DISCORD_WEBHOOK_URL = process.env.DISCORD_WEBHOOK_URL;
 const DATA_DIR = './data';
 const BUILDINGS_DB_FILE = './data/buildings.json';
@@ -255,7 +255,7 @@ async function buildRoad(bot, buildingX, buildingZ, doorRel, houseWidth, houseDe
     }
 
     steps++;
-    await utils.sleep(100);
+    await utils.sleep(400); // 4x verlangsamt (100 * 4)
 
     if (steps % 10 === 0) {
       console.log(`🛣️ Straße: ${steps}/${MAX_STEPS} Schritte, Distanz: ${Math.round(distance2D(x, z, centerX, centerZ))}`);
@@ -283,15 +283,15 @@ async function flattenArea(bot, area) {
 
       for (let yv = area.y - 3; yv < area.y; yv++) {
         await bot.chat(`/setblock ${x} ${yv} ${z} ${FILL_BLOCK}`);
-        await utils.sleep(20);
+        await utils.sleep(80); // 4x verlangsamt (20 * 4)
       }
 
       await bot.chat(`/setblock ${x} ${area.y} ${z} ${FILL_BLOCK}`);
-      await utils.sleep(20);
+      await utils.sleep(80); // 4x verlangsamt (20 * 4)
 
       for (let yv = area.y + 1; yv <= 130; yv++) {
         await bot.chat(`/setblock ${x} ${yv} ${z} air`);
-        await utils.sleep(15);
+        await utils.sleep(60); // 4x verlangsamt (15 * 4)
       }
     }
   }
@@ -376,9 +376,9 @@ module.exports = {
     const placements = this.planVillageLayout(centerX, centerY, centerZ, houseCount, houses);
     const villageId = registerOrUpdateVillage(centerX, centerY, centerZ, houseCount);
 
-    // ✨ Bewege Bot zum Zentrum
+    // Bewege Bot zum Zentrum
     await movement.moveToPosition(bot, centerX, centerY + 2, centerZ, 5);
-    await utils.sleep(500);
+    await utils.sleep(2000); // 4x verlangsamt (500 * 4)
 
     for (let i = global.botState.buildIndex || 0; i < placements.length; i++) {
       if (!global.botState.isBuilding) break;
@@ -393,9 +393,9 @@ module.exports = {
       
       console.log(`🏠 Baue ${house.name} bei (${placement.x}, ${centerY}, ${placement.z})`);
       
-      // ✨ Bewege zur Baustelle mit Terrain-Handling
+      // Bewege zur Baustelle mit Terrain-Handling
       await movement.moveToBuildingSite(bot, { x: placement.x, z: placement.z, y: centerY });
-      await utils.sleep(500);
+      await utils.sleep(2000); // 4x verlangsamt (500 * 4)
       
       const area = {
         x1: placement.x - 8, x2: placement.x + 8,
@@ -420,7 +420,7 @@ module.exports = {
       saveState(global.botState);
       
       await sendStatus(bot, `✅ Gebäude ${i + 1}/${placements.length} fertig: ${house.name}`);
-      await utils.sleep(2000);
+      await utils.sleep(8000); // 4x verlangsamt (2000 * 4)
     }
 
     await sendStatus(bot, '🎉 Dorfbau komplett!');
@@ -480,7 +480,7 @@ module.exports = {
           if (material) {
             const pos = new Vec3(x + dx, y + (layer.y || 0), z + dz);
             await bot.chat(`/setblock ${Math.floor(pos.x)} ${Math.floor(pos.y)} ${Math.floor(pos.z)} ${material}`);
-            await utils.sleep(100);
+            await utils.sleep(400); // 4x verlangsamt (100 * 4)
           }
         }
       }

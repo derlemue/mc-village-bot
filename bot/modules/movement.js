@@ -66,7 +66,7 @@ async function clearPathToPosition(bot, targetX, targetY, targetZ) {
     // Räume Terrain ab diesem Punkt
     await terrain.clearTerrainColumn(bot, checkX, checkZ, targetY);
     
-    await utils.sleep(200);
+    await utils.sleep(800); // 4x verlangsamt (200 * 4)
   }
 
   console.log(`✅ Weg gerodet`);
