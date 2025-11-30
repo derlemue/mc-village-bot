@@ -1,7 +1,5 @@
 FROM node:22-alpine
-
 WORKDIR /app
-
 RUN mkdir -p /app/data /app/modules /app/schematics
 
 COPY package*.json ./

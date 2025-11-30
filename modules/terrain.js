@@ -6,7 +6,7 @@ class TerrainPreparer {
   async prepareBuildingArea(building) {
     const { x, y, z, width, depth } = building;
     
-    // ✅ FUNDAMENT 10-40 größer!
+    // FUNDAMENT 10-40 größer!
     const extraSizeX = 10 + Math.floor(Math.random() * 30);
     const extraSizeZ = 10 + Math.floor(Math.random() * 30);
     const fundX = x - Math.floor(extraSizeX/2);
@@ -38,13 +38,13 @@ class TerrainPreparer {
 
   async _clearSkyArea(x, z, width, depth, buildY) {
     const skyTop = Math.min(buildY + 128, 256);
-    console.log(`[TerrainPreparer] 🌤️ Freiräumen y=${buildY} bis y=${skyTop}`);
+    console.log(`[TerrainPreparer] 🌤️ Freiräumen y=${buildY} bis y=${skyTop} (LANGsam)`);
     
-    for (let bx = x - 2; bx < x + width + 2; bx++) {
-      for (let bz = z - 2; bz < z + depth + 2; bz++) {
-        for (let by = buildY; by < skyTop; by += 4) {
+    for (let bx = x - 2; bx < x + width + 2; bx += 2) {
+      for (let bz = z - 2; bz < z + depth + 2; bz += 2) {
+        for (let by = buildY; by < skyTop; by += 8) {
           this.bot.chat(`/setblock ${bx} ${by} ${bz} air`);
-          await new Promise(r => setTimeout(r, 3));
+          await new Promise(r => setTimeout(r, 20));
         }
       }
     }

@@ -9,8 +9,5 @@
   "dependencies": {
     "mineflayer": "^4.20.2",
     "dotenv": "^16.4.5"
-  },
-  "engines": {
-    "node": ">=18.0.0"
   }
 }
