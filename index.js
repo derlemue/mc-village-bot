@@ -25,10 +25,12 @@ async function connectBot() {
   currentBot = bot;
 
   bot.on('login', () => console.log('[BOT] ✅ LOGIN'));
-  bot.on('spawn', () => console.log('[BOT] ✅ SPAWNED'));
+  bot.on('spawn', () => {
+	console.log('[BOT] ✅ SPAWNED');
+});
   bot.on('error', err => console.log('[BOT] ❌ ERROR:', err.message));
   bot.on('end', () => {
-    console.log('[BOT] 🔌 DISCONNECTED');
+   console.log('[BOT] 🔌 DISCONNECTED');
     setTimeout(connectBot, 5000);
   });
 

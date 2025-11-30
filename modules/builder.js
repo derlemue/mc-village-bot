@@ -18,7 +18,7 @@ class Builder {
       await new Promise(r => setTimeout(r, 200)); // Längerer Delay
 
       // Connection Check
-      if (!this.bot.isConnected()) {
+      if (!this.bot.player || !this.bot.player.entity) {
         throw new Error('Connection lost during foundation');
       }
 
@@ -43,7 +43,7 @@ class Builder {
       await new Promise(r => setTimeout(r, 150));
 
       // Connection Check nach Wänden
-      if (!this.bot.isConnected()) {
+	if (!this.bot.player || !this.bot.player.entity) {
         throw new Error('Connection lost during walls');
       }
 
@@ -85,7 +85,7 @@ class Builder {
       console.error(`[Builder] ❌ Build failed: ${error.message}`);
       
       // Graceful disconnect und Reconnect-Vorbereitung
-      if (this.bot.isConnected()) {
+      if (this.bot.player && this.bot.player.entity) {
         this.bot.chat('/say Build failed - reconnecting...');
         await new Promise(r => setTimeout(r, 1000));
       }
