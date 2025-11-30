@@ -39,7 +39,7 @@ class Builder {
     for (let bx = x; bx < x + width; bx++) {
       for (let bz = z; bz < z + depth; bz++) {
         this.bot.chat(`/setblock ${bx} ${y + height - 1} ${bz} ${roofBlock}`);
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise(r => setTimeout(r, 50));
       }
     }
 
