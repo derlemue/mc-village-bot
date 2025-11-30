@@ -38,17 +38,24 @@ class TerrainPreparer {
 
   async _clearSkyArea(x, z, width, depth, buildY) {
     const skyTop = Math.min(buildY + 128, 256);
-    console.log(`[TerrainPreparer] 🌤️ Freiräumen y=${buildY} bis y=${skyTop} (LANGsam)`);
+    console.log(`[TerrainPreparer] 🌤️ Freiräumen y=${buildY} bis y=${skyTop}`);
     
-    for (let bx = x - 2; bx < x + width + 2; bx += 2) {
-      for (let bz = z - 2; bz < z + depth + 2; bz += 2) {
-        for (let by = buildY; by < skyTop; by += 8) {
+    // ✅ FIX: VOLLSTÄNDIGE Schleifen + KLEINERE Sprünge!
+    for (let bx = x - 3; bx < x + width + 3; bx++) {
+      for (let bz = z - 3; bz < z + depth + 3; bz++) {
+        // JEDEN Block einzeln (keine Sprünge!)
+        for (let by = buildY; by < skyTop; by++) {
           this.bot.chat(`/setblock ${bx} ${by} ${bz} air`);
-          await new Promise(r => setTimeout(r, 20));
+          await new Promise(r => setTimeout(r, 5));  // ✅ 5ms PAUSE
+          
+          // ✅ PROGRESS alle 32 Blöcke
+          if (by % 32 === 0) {
+            console.log(`[TerrainPreparer] 🌤️ Fortschritt: y=${by}/${skyTop} bei (${bx},${bz})`);
+          }
         }
       }
     }
-    console.log('[TerrainPreparer] ✅ Sky Area geleert');
+    console.log('[TerrainPreparer] ✅ Sky Area 100% geleert!');
   }
 }
 
