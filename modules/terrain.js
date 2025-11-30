@@ -9,53 +9,81 @@ class TerrainPreparer {
     // FUNDAMENT 10-40 größer!
     const extraSizeX = 10 + Math.floor(Math.random() * 30);
     const extraSizeZ = 10 + Math.floor(Math.random() * 30);
-    const fundX = x - Math.floor(extraSizeX/2);
-    const fundZ = z - Math.floor(extraSizeZ/2);
+    const fundX = x - Math.floor(extraSizeX / 2);
+    const fundZ = z - Math.floor(extraSizeZ / 2);
     const fundWidth = width + extraSizeX;
     const fundDepth = depth + extraSizeZ;
     
     console.log(`[TerrainPreparer] 📐 Bereite ${width}x${depth} bei (${x},${y},${z}) vor`);
-    console.log(`[TerrainPreparer] 🧱 FUNDAMENT ${fundWidth}x${fundDepth} (+${extraSizeX}/${extraSizeZ})`);
+    console.log(`[TerrainPreparer] 🧱 FUNDAMENT ${fundWidth}x${fundDepth} (+${extraSizeX}/${extraSizeZ}) bei (${fundX},${fundZ})`);
 
+    // ✅ SCHRITT 1: Fundament bauen
     await this._buildSmallFoundation(fundX, fundZ, fundWidth, fundDepth, y);
-    await this._clearSkyArea(x, z, width, depth, y);
+    
+    // ✅ SCHRITT 2: Sky-Bereich über gesamter FUNDAMENT-Fläche freiräumen
+    await this._clearSkyAreaAboveFoundation(fundX, fundZ, fundWidth, fundDepth, y);
+    
     console.log('[TerrainPreparer] ✅ Vorbereitung komplett');
   }
 
   async _buildSmallFoundation(x, z, width, depth, buildingY) {
-    console.log(`[TerrainPreparer] 🧱 FUNDAMENT y=61 bis ${buildingY-1}`);
+    console.log(`[TerrainPreparer] 🧱 FUNDAMENT y=61 bis ${buildingY - 1}`);
     
+    let blockCount = 0;
     for (let bx = x; bx < x + width; bx++) {
       for (let bz = z; bz < z + depth; bz++) {
         for (let by = 61; by < buildingY; by++) {
           this.bot.chat(`/setblock ${bx} ${by} ${bz} deepslate_tiles`);
+          blockCount++;
           await new Promise(r => setTimeout(r, 3));
-        }
-      }
-    }
-    console.log('[TerrainPreparer] ✅ FUNDAMENT GEBAUT');
-  }
-
-  async _clearSkyArea(x, z, width, depth, buildY) {
-    const skyTop = Math.min(buildY + 128, 256);
-    console.log(`[TerrainPreparer] 🌤️ Freiräumen y=${buildY} bis y=${skyTop}`);
-    
-    // ✅ FIX: VOLLSTÄNDIGE Schleifen + KLEINERE Sprünge!
-    for (let bx = x - 3; bx < x + width + 3; bx++) {
-      for (let bz = z - 3; bz < z + depth + 3; bz++) {
-        // JEDEN Block einzeln (keine Sprünge!)
-        for (let by = buildY; by < skyTop; by++) {
-          this.bot.chat(`/setblock ${bx} ${by} ${bz} air`);
-          await new Promise(r => setTimeout(r, 5));  // ✅ 5ms PAUSE
           
-          // ✅ PROGRESS alle 32 Blöcke
-          if (by % 32 === 0) {
-            console.log(`[TerrainPreparer] 🌤️ Fortschritt: y=${by}/${skyTop} bei (${bx},${bz})`);
+          // Progress-Feedback alle 100 Blöcke
+          if (blockCount % 100 === 0) {
+            console.log(`[TerrainPreparer] 🧱 ${blockCount} Fundament-Blöcke platziert...`);
           }
         }
       }
     }
-    console.log('[TerrainPreparer] ✅ Sky Area 100% geleert!');
+    console.log(`[TerrainPreparer] ✅ FUNDAMENT FERTIG (${blockCount} Blöcke)`);
+  }
+
+  async _clearSkyAreaAboveFoundation(fundX, fundZ, fundWidth, fundDepth, buildingY) {
+    // ✅ FIX: Nutze FUNDAMENT-Koordinaten, nicht Gebäude-Koordinaten!
+    const skyTop = Math.min(buildingY + 128, 256);
+    const clearStartX = fundX;
+    const clearEndX = fundX + fundWidth;
+    const clearStartZ = fundZ;
+    const clearEndZ = fundZ + fundDepth;
+    
+    console.log(`[TerrainPreparer] 🌤️ Freiräumen über FUNDAMENT:`);
+    console.log(`[TerrainPreparer]   X: ${clearStartX} bis ${clearEndX} (${fundWidth} Blöcke)`);
+    console.log(`[TerrainPreparer]   Z: ${clearStartZ} bis ${clearEndZ} (${fundDepth} Blöcke)`);
+    console.log(`[TerrainPreparer]   Y: ${buildingY} bis ${skyTop} (${skyTop - buildingY} Ebenen)`);
+    
+    const totalBlocks = fundWidth * fundDepth * (skyTop - buildingY);
+    console.log(`[TerrainPreparer]   📊 Total: ${totalBlocks} Blöcke zu löschen`);
+    
+    let blockCount = 0;
+    
+    // ✅ VOLLSTÄNDIGE Schleifen über gesamte Fundament-Fläche
+    for (let bx = clearStartX; bx < clearEndX; bx++) {
+      for (let bz = clearStartZ; bz < clearEndZ; bz++) {
+        // JEDEN Block einzeln (keine Sprünge!)
+        for (let by = buildingY; by < skyTop; by++) {
+          this.bot.chat(`/setblock ${bx} ${by} ${bz} air`);
+          blockCount++;
+          await new Promise(r => setTimeout(r, 5));  // 5ms PAUSE
+          
+          // Progress-Feedback alle 100 Blöcke
+          if (blockCount % 100 === 0) {
+            const percent = Math.round((blockCount / totalBlocks) * 100);
+            console.log(`[TerrainPreparer] 🌤️ Fortschritt: ${blockCount}/${totalBlocks} (${percent}%)`);
+          }
+        }
+      }
+    }
+    
+    console.log(`[TerrainPreparer] ✅ Sky Area 100% geleert! (${blockCount} Blöcke gelöscht)`);
   }
 }
 
