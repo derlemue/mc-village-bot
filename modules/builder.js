@@ -30,7 +30,7 @@ class Builder {
         this.bot.chat(`/setblock ${x} ${by} ${bz} ${wallBlock}`);
         this.bot.chat(`/setblock ${x + width - 1} ${by} ${bz} ${wallBlock}`);
       }
-      await new Promise(r => setTimeout(r, 10));
+      await new Promise(r => setTimeout(r, 50));
     }
 
     // Phase 3: Dach
@@ -39,7 +39,7 @@ class Builder {
     for (let bx = x; bx < x + width; bx++) {
       for (let bz = z; bz < z + depth; bz++) {
         this.bot.chat(`/setblock ${bx} ${y + height - 1} ${bz} ${roofBlock}`);
-        await new Promise(r => setTimeout(r, 2));
+        await new Promise(r => setTimeout(r, 2000));
       }
     }
 
