@@ -1,11 +1,0 @@
---2025-11-30 05:33:34--  https://www.nbt-data.com/download?id=8
-Resolving www.nbt-data.com (www.nbt-data.com)... 2606:4700:3030::ac43:9564, 2606:4700:3035::6815:1d92, 104.21.29.146, ...
-Connecting to www.nbt-data.com (www.nbt-data.com)|2606:4700:3030::ac43:9564|:443... connected.
-HTTP request sent, awaiting response... 200 OK
-Length: unspecified [text/html]
-Saving to: ‘download?id=8’
-
-download?id=8                       [<=>                                                     ]       0  --.-KB/s               download?id=8                       [ <=>                                                    ]     127  --.-KB/s    in 0s      
-
-2025-11-30 05:33:34 (83.4 MB/s) - ‘download?id=8’ saved [127]
-
