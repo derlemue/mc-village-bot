@@ -73,7 +73,7 @@ class StreetBuilder {
   }
 
   async buildLanternPosts(buildY, building) {
-    console.log(`[StreetBuilder] 💡 ${building.name} Laternen y=${buildY-1}`);
+    console.log(`[StreetBuilder] 💡 ${building.name} Laternen y=${buildY}`);
     const width = building.width || 16;
     const depth = building.depth || 16;
     const interval = 6, offset = 1;
