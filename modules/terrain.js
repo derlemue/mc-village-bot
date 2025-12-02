@@ -72,7 +72,7 @@ class TerrainPreparer {
         for (let by = buildingY; by < skyTop; by++) {
           this.bot.chat(`/setblock ${bx} ${by} ${bz} air`);
           blockCount++;
-          await new Promise(r => setTimeout(r, 5));  // 5ms PAUSE
+          await new Promise(r => setTimeout(r, 2));  // 5ms PAUSE
           
           // Progress-Feedback alle 100 Blöcke
           if (blockCount % 100 === 0) {
