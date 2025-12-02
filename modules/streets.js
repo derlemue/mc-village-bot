@@ -232,7 +232,7 @@ class StreetBuilder {
     console.log(`[StreetBuilder] 💡 Straßenlaternen (links/rechts, 1 Block Abstand)`);
     const dx = x2 - x1, dz = z2 - z1;
     const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
-    const interval = 6;
+    const interval = 10;
 
     // Straßenrichtung bestimmen
     const isHorizontal = Math.abs(dx) > Math.abs(dz);
