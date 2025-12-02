@@ -44,13 +44,13 @@ class StreetBuilder {
     const toX = toBuilding.x + toDoorPos.x;
     const toZ = toBuilding.z + toDoorPos.z;
 
-    console.log(`[StreetBuilder] 🛣️ Straße y=${buildY-2} von (${fromX},${fromZ}) nach (${toX},${toZ})`);
-    await this._buildPath(buildY - 2, fromX, fromZ, toX, toZ);  // ✅ Y-2!
+    console.log(`[StreetBuilder] 🛣️ Straße y=${buildY} von (${fromX},${fromZ}) nach (${toX},${toZ})`);
+    await this._buildPath(buildY, fromX, fromZ, toX, toZ);  // ✅ Y-2!
 
     this.streets.push({
       from: { name: fromBuilding.name || 'unknown', x: fromX, z: fromZ },
       to: { name: toBuilding.name || 'unknown', x: toX, z: toZ },
-      buildY: buildY - 2, timestamp: new Date().toISOString()
+      buildY: buildY, timestamp: new Date().toISOString()
     });
     this.saveStreets();
   }
@@ -73,7 +73,7 @@ class StreetBuilder {
   }
 
   async buildLanternPosts(buildY, building) {
-    console.log(`[StreetBuilder] 💡 ${building.name} Laternen y=${buildY-1}`);
+    console.log(`[StreetBuilder] 💡 ${building.name} Laternen y=${buildY}`);
     const width = building.width || 16;
     const depth = building.depth || 16;
     const interval = 6, offset = 1;
@@ -92,7 +92,7 @@ class StreetBuilder {
     for (const pos of positions) {
       const key = `${pos.x},${pos.z}`;
       if (!seen.has(key)) {
-        await this._placeLantern(buildY - 1, pos.x, pos.z);  // ✅ Y-1!
+        await this._placeLantern(buildY, pos.x, pos.z);  // ✅ Y-1!
         seen.add(key);
       }
     }
