@@ -74,8 +74,8 @@ class TerrainPreparer {
           blockCount++;
           await new Promise(r => setTimeout(r, 2));  // 5ms PAUSE
           
-          // Progress-Feedback alle 100 Blöcke
-          if (blockCount % 100 === 0) {
+          // Progress-Feedback alle 1000 Blöcke
+          if (blockCount % 1000 === 0) {
             const percent = Math.round((blockCount / totalBlocks) * 100);
             console.log(`[TerrainPreparer] 🌤️ Fortschritt: ${blockCount}/${totalBlocks} (${percent}%)`);
           }
