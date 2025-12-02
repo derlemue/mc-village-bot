@@ -73,7 +73,7 @@ class StreetBuilder {
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
 
-      // Prüfe 5x1 Straße-Bereich
+      // Prüfe 5x3 Straße-Bereich
       for (let ox = -2; ox <= 2; ox++) {
         for (let oz = -1; oz <= 1; oz++) {
           if (this._isPositionInBuilding(currentX + ox, currentZ + oz)) {
@@ -94,7 +94,7 @@ class StreetBuilder {
       
       if (distFrom <= maxDistance || distTo <= maxDistance) {
         console.log(`[StreetBuilder] 🔗 Gefunden Straße zu (${street.from.x},${street.from.z}) dist:${distFrom}`);
-        return street.from; // Verbinde mit Startpunkt der Straße
+        return street.from;
       }
     }
     return null;
@@ -126,35 +126,86 @@ class StreetBuilder {
     return null;
   }
 
+  // ✅ KOMPATIBILITÄT: buildStreetToBuilding (für index.js)
+  async buildStreetToBuilding(buildY, fromBuilding, toBuilding) {
+    let fromX = fromBuilding.x + (fromBuilding.doorPos?.x || 8);
+    let fromZ = fromBuilding.z + (fromBuilding.doorPos?.z || 0);
+    let toX = toBuilding.x + (toBuilding.doorPos?.x || 8);
+    let toZ = toBuilding.z + (toBuilding.doorPos?.z || 0);
+
+    console.log(`[StreetBuilder] 🛣️ Straße y=${buildY} von (${fromX},${fromZ}) nach (${toX},${toZ})`);
+
+    let path = { x1: fromX, z1: fromZ, x2: toX, z2: toZ };
+    if (!this._isPathFree(buildY, fromX, fromZ, toX, toZ)) {
+      path = this._findValidPath(buildY, fromX, fromZ, toX, toZ);
+      if (!path) {
+        console.log('[StreetBuilder] ❌ KEIN freier Pfad gefunden - überspringe!');
+        return;
+      }
+    }
+
+    await this._clearAbove(buildY, path.x1, path.z1, path.x2, path.z2);
+    await this._buildPath(buildY, path.x1, path.z1, path.x2, path.z2);
+    await this._buildStreetLanterns(buildY, path.x1, path.z1, path.x2, path.z2);
+
+    this.streets.push({
+      from: { name: fromBuilding.name || 'unknown', x: path.x1, z: path.z1 },
+      to: { name: toBuilding.name || 'unknown', x: path.x2, z: path.z2 },
+      buildY: buildY, timestamp: new Date().toISOString()
+    });
+    this.saveStreets();
+  }
+
+  // ✅ KOMPATIBILITÄT: buildLanternPosts (für index.js Zeile 112)
+  async buildLanternPosts(buildY, building) {
+    console.log(`[StreetBuilder] 💡 ${building.name} Gebäude-Laternen y=${buildY}`);
+    const width = building.width || 16;
+    const depth = building.depth || 16;
+    const interval = 6, offset = 1;
+    const minX = building.x - offset, maxX = building.x + width + offset;
+    const minZ = building.z - offset, maxZ = building.z + depth + offset;
+
+    const positions = [];
+    for (let x = minX; x <= maxX; x += interval) {
+      positions.push({x: x, z: minZ}, {x: x, z: maxZ});
+    }
+    for (let z = minZ; z <= maxZ; z += interval) {
+      positions.push({x: minX, z: z}, {x: maxX, z: z});
+    }
+
+    const seen = new Set();
+    for (const pos of positions) {
+      const key = `${pos.x},${pos.z}`;
+      if (!seen.has(key)) {
+        await this._placeLantern(buildY, pos.x, pos.z);
+        seen.add(key);
+      }
+    }
+  }
+
   // FLEXIBLER Build-Befehl: Koordinaten ODER Gebäude
   async buildStreet(buildY, target) {
     let fromBuilding, toBuilding, targetX, targetZ;
 
-    // Fall 1: Ziel-Koordinaten
     if (typeof target === 'object' && target.x !== undefined && target.z !== undefined) {
       targetX = target.x;
       targetZ = target.z;
-      fromBuilding = this.streets[this.streets.length - 1]?.to || null; // Von letzter Straße
-    } 
-    // Fall 2: Ziel-Gebäude
-    else if (typeof target === 'object' && target.name) {
+      fromBuilding = this.streets[this.streets.length - 1]?.to || null;
+    } else if (typeof target === 'object' && target.name) {
       toBuilding = target;
       fromBuilding = this.streets[this.streets.length - 1]?.to || null;
     }
 
-    // Von letzter Straße starten oder Dorf-Mitte
     let fromX, fromZ;
     if (fromBuilding) {
       fromX = fromBuilding.x + (fromBuilding.doorPos?.x || 8);
       fromZ = fromBuilding.z + (fromBuilding.doorPos?.z || 0);
     } else {
-      // Dorf-Mitte als Fallback (z.B. erstes Gebäude)
       fromX = this.villages[0]?.buildings?.[0]?.x + 8 || 0;
       fromZ = this.villages[0]?.buildings?.[0]?.z || 0;
     }
 
-    // Ziel bestimmen
-    let finalX1 = fromX, finalZ1 = fromZ, finalX2, finalZ2;
+    let finalX2, finalZ2;
     if (targetX !== undefined) {
       finalX2 = targetX;
       finalZ2 = targetZ;
@@ -163,12 +214,11 @@ class StreetBuilder {
       finalZ2 = toBuilding.z + (toBuilding.doorPos?.z || 0);
     }
 
-    console.log(`[StreetBuilder] 🛣️ Straße y=${buildY} von (${finalX1},${finalZ1}) nach (${finalX2},${finalZ2})`);
+    console.log(`[StreetBuilder] 🛣️ Straße y=${buildY} von (${fromX},${fromZ}) nach (${finalX2},${finalZ2})`);
 
-    // Pfad finden
-    let path = { x1: finalX1, z1: finalZ1, x2: finalX2, z2: finalZ2 };
-    if (!this._isPathFree(buildY, finalX1, finalZ1, finalX2, finalZ2)) {
-      path = this._findValidPath(buildY, finalX1, finalZ1, finalX2, finalZ2);
+    let path = { x1: fromX, z1: fromZ, x2: finalX2, z2: finalZ2 };
+    if (!this._isPathFree(buildY, fromX, fromZ, finalX2, finalZ2)) {
+      path = this._findValidPath(buildY, fromX, fromZ, finalX2, finalZ2);
       if (!path) {
         console.log('[StreetBuilder] ❌ KEIN freier Pfad gefunden - überspringe!');
         return;
@@ -216,7 +266,6 @@ class StreetBuilder {
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
       
-      // 5x1 Straße bauen
       for (let ox = -2; ox <= 2; ox++) {
         for (let oz = -1; oz <= 1; oz++) {
           this.bot.chat(`/setblock ${currentX+ox} ${buildY} ${currentZ+oz} stone_bricks`);
@@ -227,45 +276,31 @@ class StreetBuilder {
     console.log('[StreetBuilder] ✅ Straße fertig y=' + buildY);
   }
 
-  // ✅ LATERNE: Links/Rechts (1 Block Abstand), stone_bricks (y) + lantern (y+1)
   async _buildStreetLanterns(buildY, x1, z1, x2, z2) {
     console.log(`[StreetBuilder] 💡 Straßenlaternen (links/rechts, 1 Block Abstand)`);
     const dx = x2 - x1, dz = z2 - z1;
     const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
-    const interval = 10;
+    const interval = 6;
 
-    // Straßenrichtung bestimmen
     const isHorizontal = Math.abs(dx) > Math.abs(dz);
-    const dirX = dx > 0 ? 1 : (dx < 0 ? -1 : 0);
-    const dirZ = dz > 0 ? 1 : (dz < 0 ? -1 : 0);
-
-    // Links/Rechts perpendicular zu Straße (1 Block Abstand)
-    const leftOff = isHorizontal ? [0, 3] : [-3, 0];   // Links: +Z oder +X
-    const rightOff = isHorizontal ? [0, -3] : [3, 0];  // Rechts: -Z oder -X
+    const leftOff = isHorizontal ? [0, 3] : [-3, 0];
+    const rightOff = isHorizontal ? [0, -3] : [3, 0];
 
     for (let step = 0; step <= totalSteps; step += interval) {
       const progress = step / totalSteps;
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
 
-      // Links
       await this._placeLantern(buildY, currentX + leftOff[0], currentZ + leftOff[1]);
-      // Rechts
       await this._placeLantern(buildY, currentX + rightOff[0], currentZ + rightOff[1]);
     }
   }
 
   async _placeLantern(buildY, x, z) {
-    // ✅ stone_bricks auf y, lantern auf y+1 (1 Block Abstand zur Straße)
     this.bot.chat(`/setblock ${x} ${buildY} ${z} stone_bricks`);
     await new Promise(r => setTimeout(r, 50));
     this.bot.chat(`/setblock ${x} ${buildY+1} ${z} lantern`);
     await new Promise(r => setTimeout(r, 50));
-  }
-
-  // Kompatibilität: alter buildStreetToBuilding
-  async buildStreetToBuilding(buildY, fromBuilding, toBuilding) {
-    await this.buildStreet(buildY, toBuilding);
   }
 }
 
