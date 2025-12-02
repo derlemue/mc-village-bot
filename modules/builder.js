@@ -62,7 +62,7 @@ class Builder {
           await new Promise(r => setTimeout(r, 100));
           
           // Häufiger Connection Check bei Details
-          if (!this.bot.isConnected()) {
+      if (!this.bot.player || !this.bot.player.entity) {
             throw new Error('Connection lost during details');
           }
         }
@@ -96,10 +96,10 @@ class Builder {
 
   // Helper: Connection prüfen und reconnect wenn nötig
   async reconnectIfNeeded() {
-    if (!this.bot.isConnected()) {
+      if (!this.bot.player || !this.bot.player.entity) {
       console.log('[Builder] 🔌 Reconnecting...');
       // Hier könnte bot.quit() + reconnect logic implementiert werden
-      throw new Error('Bot disconnected - manual reconnect required');
+      throw new Error('Bot dxisconnected - manual reconnect required');
     }
   }
 }
