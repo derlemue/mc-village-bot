@@ -38,14 +38,18 @@ class StreetBuilder {
   async buildStreetToBuilding(buildY, fromBuilding, toBuilding) {
     const fromDoorPos = fromBuilding.doorPos || { x: 8, z: 0 };
     const toDoorPos = toBuilding.doorPos || { x: 8, z: 0 };
-    
+
     const fromX = fromBuilding.x + fromDoorPos.x;
     const fromZ = fromBuilding.z + fromDoorPos.z;
     const toX = toBuilding.x + toDoorPos.x;
     const toZ = toBuilding.z + toDoorPos.z;
 
     console.log(`[StreetBuilder] 🛣️ Straße y=${buildY} von (${fromX},${fromZ}) nach (${toX},${toZ})`);
-    await this._buildPath(buildY, fromX, fromZ, toX, toZ);  // ✅ Y-2!
+
+    // ✅ Freiräumen: +4 Blöcke oberhalb von buildY
+    await this._clearAbove(buildY, fromX, fromZ, toX, toZ);
+
+    await this._buildPath(buildY, fromX, fromZ, toX, toZ);
 
     this.streets.push({
       from: { name: fromBuilding.name || 'unknown', x: fromX, z: fromZ },
@@ -55,14 +59,40 @@ class StreetBuilder {
     this.saveStreets();
   }
 
-  async _buildPath(buildY, x1, z1, x2, z2) {
+  async _clearAbove(buildY, x1, z1, x2, z2) {
+    console.log(`[StreetBuilder] 🧹 Freiräumen oberhalb y=${buildY} bis y=${buildY+4}`);
     const dx = x2 - x1, dz = z2 - z1;
     const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
+
     for (let step = 0; step <= totalSteps; step++) {
       const progress = step / totalSteps;
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
-      
+
+      const offsets = [[-1,0],[0,-1],[0,0],[0,1],[1,0]];
+
+      for (const [ox, oz] of offsets) {
+        const blockX = currentX + ox;
+        const blockZ = currentZ + oz;
+        
+        // 5 Ebenen oberhalb freiräumen (buildY+1 bis buildY+5)
+        for (let clearY = buildY + 1; clearY <= buildY + 5; clearY++) {
+          this.bot.chat(`/setblock ${blockX} ${clearY} ${blockZ} air`);
+          await new Promise(r => setTimeout(r, 5));
+        }
+      }
+    }
+  }
+
+  async _buildPath(buildY, x1, z1, x2, z2) {
+    const dx = x2 - x1, dz = z2 - z1;
+    const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
+
+    for (let step = 0; step <= totalSteps; step++) {
+      const progress = step / totalSteps;
+      const currentX = Math.round(x1 + dx * progress);
+      const currentZ = Math.round(z1 + dz * progress);
+
       const offsets = [[-1,0],[0,-1],[0,0],[0,1],[1,0]];
       for (const [ox, oz] of offsets) {
         this.bot.chat(`/setblock ${currentX+ox} ${buildY} ${currentZ+oz} stone_bricks`);
@@ -92,7 +122,7 @@ class StreetBuilder {
     for (const pos of positions) {
       const key = `${pos.x},${pos.z}`;
       if (!seen.has(key)) {
-        await this._placeLantern(buildY, pos.x, pos.z);  // ✅ Y-1!
+        await this._placeLantern(buildY, pos.x, pos.z);
         seen.add(key);
       }
     }
