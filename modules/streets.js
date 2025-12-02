@@ -50,53 +50,79 @@ class StreetBuilder {
     }
   }
 
-  // Prüft ob Pfad Gebäude blockiert
-  _isPathBlocked(buildY, x1, z1, x2, z2) {
-    const dx = x2 - x1, dz = z2 - z1;
-    const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
-    
-    for (let step = 0; step <= totalSteps; step++) {
-      const progress = step / totalSteps;
-      const currentX = Math.round(x1 + dx * progress);
-      const currentZ = Math.round(z1 + dz * progress);
-
-      const offsets = [[-1,0],[0,-1],[0,0],[0,1],[1,0]];
-      for (const [ox, oz] of offsets) {
-        const checkX = currentX + ox;
-        const checkZ = currentZ + oz;
-        
-        // Prüfe alle Gebäude aus villages.json
-        for (const village of this.villages) {
-          for (const building of village.buildings || []) {
-            if (checkX >= building.x && checkX < building.x + (building.width || 16) &&
-                checkZ >= building.z && checkZ < building.z + (building.depth || 16)) {
-              return true; // Blockiert!
-            }
-          }
+  // Prüft ob Position in Gebäude liegt (mit Margin)
+  _isPositionInBuilding(x, z) {
+    for (const village of this.villages) {
+      for (const building of village.buildings || []) {
+        const margin = 2; // Sicherheitsabstand
+        if (x >= building.x - margin && x < building.x + (building.width || 16) + margin &&
+            z >= building.z - margin && z < building.z + (building.depth || 16) + margin) {
+          return true;
         }
       }
     }
     return false;
   }
 
-  // Finde Umgehungsweg um Gebäude
-  _findDetour(buildY, x1, z1, x2, z2, maxAttempts = 10) {
-    const directions = [[3,0],[-3,0],[0,3],[0,-3]]; // Rechts, links, vor, zurück
+  // Prüft ob Pfad Gebäude blockiert (optimiert)
+  _isPathBlocked(buildY, x1, z1, x2, z2) {
+    const dx = x2 - x1, dz = z2 - z1;
+    const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
     
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      for (const [dxOff, dzOff] of directions) {
-        const testX1 = x1 + dxOff;
-        const testZ1 = z1 + dzOff;
-        const testX2 = x2 + dxOff;
-        const testZ2 = z2 + dzOff;
-        
-        if (!this._isPathBlocked(buildY, testX1, testZ1, testX2, testZ2)) {
-          console.log(`[StreetBuilder] 🔀 Umweg gefunden: offset (${dxOff},${dzOff})`);
-          return { x1: testX1, z1: testZ1, x2: testX2, z2: testZ2 };
+    console.log(`[StreetBuilder] 🔍 Prüfe Pfad: ${totalSteps + 1} Schritte`);
+    
+    for (let step = 0; step <= totalSteps; step += 2) { // Weniger Checks für Performance
+      const progress = step / totalSteps;
+      const currentX = Math.round(x1 + dx * progress);
+      const currentZ = Math.round(z1 + dz * progress);
+
+      const offsets = [[-1,0],[0,-1],[0,0],[0,1],[1,0]];
+      for (const [ox, oz] of offsets) {
+        if (this._isPositionInBuilding(currentX + ox, currentZ + oz)) {
+          console.log(`[StreetBuilder] 🚫 Blockiert bei (${currentX + ox}, ${currentZ + oz})`);
+          return true;
         }
       }
     }
-    return null; // Kein Umweg gefunden
+    return false;
+  }
+
+  // Intelligenter Umgehungsweg mit mehr Optionen
+  _findDetour(buildY, x1, z1, x2, z2, maxDistance = 8) {
+    console.log(`[StreetBuilder] 🔄 Suche Umweg (max ${maxDistance} Blöcke)`);
+    
+    // Mehrere Offset-Kombinationen testen
+    const offsets = [];
+    for (let dist = 1; dist <= maxDistance; dist++) {
+      offsets.push([dist, 0], [-dist, 0], [0, dist], [0, -dist]);
+      if (dist > 1) {
+        offsets.push([dist, dist], [dist, -dist], [-dist, dist], [-dist, -dist]);
+      }
+    }
+
+    for (const [ox, oz] of offsets) {
+      const testX1 = x1 + ox;
+      const testZ1 = z1 + oz;
+      const testX2 = x2 + ox;
+      const testZ2 = z2 + oz;
+      
+      if (!this._isPathBlocked(buildY, testX1, testZ1, testX2, testZ2)) {
+        console.log(`[StreetBuilder] ✅ Umweg gefunden: offset (${ox},${oz})`);
+        return { x1: testX1, z1: testZ1, x2: testX2, z2: testZ2 };
+      }
+    }
+    
+    // Fallback: Direkte Tür-Positionen statt DoorPos verwenden
+    console.log('[StreetBuilder] 🔄 Fallback: Direkte Positionen testen');
+    const fallbackX1 = x1 - 8, fallbackZ1 = z1;
+    const fallbackX2 = x2 - 8, fallbackZ2 = z2;
+    
+    if (!this._isPathBlocked(buildY, fallbackX1, fallbackZ1, fallbackX2, fallbackZ2)) {
+      console.log('[StreetBuilder] ✅ Fallback-Weg gefunden');
+      return { x1: fallbackX1, z1: fallbackZ1, x2: fallbackX2, z2: fallbackZ2 };
+    }
+    
+    return null;
   }
 
   async buildStreetToBuilding(buildY, fromBuilding, toBuilding) {
@@ -107,25 +133,29 @@ class StreetBuilder {
 
     console.log(`[StreetBuilder] 🛣️ Straße y=${buildY} von (${fromX},${fromZ}) nach (${toX},${toZ})`);
 
-    // Prüfe direkten Weg, sonst Umweg
+    // Prüfe direkten Weg
+    let finalX1 = fromX, finalZ1 = fromZ, finalX2 = toX, finalZ2 = toZ;
     if (this._isPathBlocked(buildY, fromX, fromZ, toX, toZ)) {
       const detour = this._findDetour(buildY, fromX, fromZ, toX, toZ);
       if (detour) {
-        fromX = detour.x1; fromZ = detour.z1;
-        toX = detour.x2; toZ = detour.z2;
+        finalX1 = detour.x1; finalZ1 = detour.z1;
+        finalX2 = detour.x2; finalZ2 = detour.z2;
       } else {
-        console.log('[StreetBuilder] ❌ Kein gangbarer Weg gefunden!');
-        return;
+        console.log('[StreetBuilder] ❌ ALLE Wege blockiert - baue trotzdem mit Warnung!');
+        // Fallback: Baue trotzdem den direkten Weg
+        finalX1 = fromX; finalZ1 = fromZ; finalX2 = toX; finalZ2 = toZ;
       }
     }
 
-    await this._clearAbove(buildY, fromX, fromZ, toX, toZ);
-    await this._buildPath(buildY, fromX, fromZ, toX, toZ);
-    await this._buildStreetLanterns(buildY, fromX, fromZ, toX, toZ); // Neue Straßenlaternen
+    console.log(`[StreetBuilder] 🏗️ Finaler Weg: (${finalX1},${finalZ1}) → (${finalX2},${finalZ2})`);
+    
+    await this._clearAbove(buildY, finalX1, finalZ1, finalX2, finalZ2);
+    await this._buildPath(buildY, finalX1, finalZ1, finalX2, finalZ2);
+    await this._buildStreetLanterns(buildY, finalX1, finalZ1, finalX2, finalZ2);
 
     this.streets.push({
-      from: { name: fromBuilding.name || 'unknown', x: fromX, z: fromZ },
-      to: { name: toBuilding.name || 'unknown', x: toX, z: toZ },
+      from: { name: fromBuilding.name || 'unknown', x: finalX1, z: finalZ1 },
+      to: { name: toBuilding.name || 'unknown', x: finalX2, z: finalZ2 },
       buildY: buildY, timestamp: new Date().toISOString()
     });
     this.saveStreets();
@@ -171,18 +201,15 @@ class StreetBuilder {
     console.log('[StreetBuilder] ✅ Straße fertig y=' + buildY);
   }
 
-  // NEU: Straßenlaternen links/rechts alle 6 Blöcke
   async _buildStreetLanterns(buildY, x1, z1, x2, z2) {
     console.log(`[StreetBuilder] 💡 Straßenlaternen y=${buildY}`);
     const dx = x2 - x1, dz = z2 - z1;
     const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
     const interval = 6;
 
-    // Richtung der Straße bestimmen für links/rechts
     const dirX = Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? 1 : -1) : 0;
     const dirZ = Math.abs(dz) > Math.abs(dx) ? (dz > 0 ? 1 : -1) : 0;
     
-    // Perpendicular offsets für links/rechts (1 Block Abstand)
     const leftOffset = dirX ? [0, dirZ ? dirZ : 1] : [dirZ ? -dirZ : -1, 0];
     const rightOffset = dirX ? [0, dirZ ? -dirZ : -1] : [dirZ ? dirZ : 1, 0];
 
@@ -191,12 +218,10 @@ class StreetBuilder {
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
 
-      // Links
       const leftX = currentX + leftOffset[0];
       const leftZ = currentZ + leftOffset[1];
       await this._placeStreetLantern(buildY, leftX, leftZ);
 
-      // Rechts  
       const rightX = currentX + rightOffset[0];
       const rightZ = currentZ + rightOffset[1];
       await this._placeStreetLantern(buildY, rightX, rightZ);
@@ -211,7 +236,6 @@ class StreetBuilder {
   }
 
   async buildLanternPosts(buildY, building) {
-    // Gebäude-Laternen (alt)
     console.log(`[StreetBuilder] 💡 ${building.name} Gebäude-Laternen y=${buildY}`);
     const width = building.width || 16;
     const depth = building.depth || 16;
