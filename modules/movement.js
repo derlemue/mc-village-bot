@@ -1,7 +1,7 @@
 class Movement {
   constructor(bot) {
     this.bot = bot;
-    console.log('[Movement] ✅ TP + LANGSAAMES Freiräumen');
+    console.log('[Movement] ✅ TP');
   }
 
   async moveToPosition(targetX, targetY, targetZ) {
