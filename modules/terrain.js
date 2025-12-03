@@ -33,7 +33,7 @@ class TerrainPreparer {
     for (let bx = x; bx < x + width; bx++) {
       for (let bz = z; bz < z + depth; bz++) {
         for (let by = 61; by < buildingY; by++) {
-          this.bot.chat(`/setblock ${bx} ${by} ${bz} deepslate_tiles`);
+          this.bot.chat(`/setblock ${bx} ${by} ${bz} bricks`);
           blockCount++;
           await new Promise(r => setTimeout(r, 3));
           

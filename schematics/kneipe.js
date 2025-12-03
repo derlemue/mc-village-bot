@@ -8,8 +8,7 @@ module.exports = {
   details: [
     { x: 4, y: 1, z: 0, block: 'spruce_door' },
     { x: 4, y: 2, z: 0, block: 'spruce_door' },
-    { x: 1, y: 2, z: 1, block: 'lantern' },
-    { x: 3, y: 6, z: 3, block: 'lantern' },
+    { x: 3, y: 5, z: 3, block: 'lantern' },
     { x: 3, y: 1, z: 3, block: 'brewing_stand' }
   ]
 };
