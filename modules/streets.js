@@ -54,30 +54,13 @@ class StreetBuilder {
     }
   }
 
-  // ✅ Phase 1: EIGENES Fundament - IMMER erlaubt
-  isPositionInForeignBuilding(x, z, ownBuilding) {
-    for (const village of this.villages) {
-      for (const building of village.buildings) {
-        // Überspringe eigenes Gebäude
-        if (building === ownBuilding) continue;
-        
-        const width = building.width || 16;
-        const depth = building.depth || 16;
-        if (x >= building.x && x < building.x + width &&
-            z >= building.z && z < building.z + depth) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  // Phase 2: ALLE anderen Gebäude blockieren
+  // ❌ ABSOLUTER BLOCK: Niemals Gebäudefläche betreten
   isPositionInAnyBuilding(x, z) {
     for (const village of this.villages) {
       for (const building of village.buildings) {
         const width = building.width || 16;
         const depth = building.depth || 16;
+        // KOMPLETTES Gebäude-Rechteck (inkl. Wände + Innenraum)
         if (x >= building.x && x < building.x + width &&
             z >= building.z && z < building.z + depth) {
           return true;
@@ -87,51 +70,77 @@ class StreetBuilder {
     return false;
   }
 
-  // Berechnet Fundament-Ende in TÜR-RICHTUNG
-  calculateFoundationExit(doorX, doorZ, building) {
+  // Berechnet Richtung von Tür zum nächsten sicheren Punkt (außerhalb Gebäudefläche)
+  getDoorDirection(doorX, doorZ, building) {
     const width = building.width || 16;
     const depth = building.depth || 16;
     
-    let exitX = doorX;
-    let exitZ = doorZ;
-    
-    // Von Tür zum nächsten Rand in TÜR-RICHTUNG
-    if (doorZ <= building.z + 1) {
-      exitZ = building.z + depth - 1; // Vorne -> Hinten
-    } else if (doorX <= building.x + 1) {
-      exitX = building.x + width - 1; // Links -> Rechts
-    } else if (doorX >= building.x + width - 2) {
-      exitX = building.x; // Rechts -> Links
+    // Von Türposition die Richtung zum nächsten Rand außerhalb
+    if (doorZ === building.z) {
+      return { stepX: 0, stepZ: 1 }; // Vorderseite -> nach hinten
+    } else if (doorX === building.x) {
+      return { stepX: 1, stepZ: 0 }; // Linke Seite -> nach rechts
+    } else if (doorX === building.x + width - 1) {
+      return { stepX: -1, stepZ: 0 }; // Rechte Seite -> nach links
     } else {
-      exitZ = building.z + depth - 1; // Standard: Hinten raus
+      return { stepX: 0, stepZ: 1 }; // Standard: gerade weg von Tür
     }
-    
-    return { x: exitX, z: exitZ };
   }
 
-  // Phase 1: Nur EIGENES Fundament Check
-  isFoundationPathFree(x1, z1, x2, z2, ownBuilding) {
-    const dx = x2 - x1, dz = z2 - z1;
-    const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
+  // Phase 1: Gerade Straße bis ERSTES Gebäude (STOPP vor Gebäudefläche!)
+  async buildStreetToBuildingEdge(buildY, startX, startZ, building) {
+    const direction = this.getDoorDirection(startX, startZ, building);
+    const pathPoints = [];
     
-    for (let step = 0; step <= totalSteps; step++) {
-      const progress = step / totalSteps;
-      const currentX = Math.round(x1 + dx * progress);
-      const currentZ = Math.round(z1 + dz * progress);
-      
+    // Von Startpunkt gerade laufen bis Gebäudefläche erreicht
+    let currentX = startX;
+    let currentZ = startZ;
+    
+    console.log(`🔍 Phase1: Suche sicheren Pfad von ${currentX},${currentZ}`);
+    
+    // Max 32 Blöcke prüfen (sicherer Abbruch)
+    for (let i = 0; i < 32; i++) {
+      // Prüfe 5x3 Straßenbereich
+      let safe = true;
       for (let ox = -2; ox <= 2; ox++) {
         for (let oz = -1; oz <= 1; oz++) {
-          if (this.isPositionInForeignBuilding(currentX + ox, currentZ + oz, ownBuilding)) {
-            console.log(`❌ Phase1: Fremdes Gebäude bei ${currentX + ox}, ${currentZ + oz}`);
-            return false;
+          if (this.isPositionInAnyBuilding(currentX + ox, currentZ + oz)) {
+            safe = false;
+            break;
           }
         }
+        if (!safe) break;
       }
+      
+      if (!safe) {
+        console.log(`🛑 Phase1 STOPP bei Gebäudefläche ${currentX},${currentZ}`);
+        break;
+      }
+      
+      pathPoints.push({ x: currentX, z: currentZ });
+      currentX += direction.stepX;
+      currentZ += direction.stepZ;
     }
-    return true;
+    
+    if (pathPoints.length === 0) {
+      console.log('❌ Kein sicherer Startpunkt gefunden!');
+      return null;
+    }
+    
+    // Letzter sicherer Punkt
+    const edgeX = pathPoints[pathPoints.length - 1].x;
+    const edgeZ = pathPoints[pathPoints.length - 1].z;
+    
+    console.log(`✅ Phase1: Straße bis Rand ${edgeX},${edgeZ}`);
+    
+    // Baue Phase 1 Straße
+    await this.clearAbove(buildY, startX, startZ, edgeX, edgeZ);
+    await this.buildPath(buildY, startX, startZ, edgeX, edgeZ);
+    
+    return { x: edgeX, z: edgeZ };
   }
 
-  // Phase 2: KEINE Gebäude erlaubt
+  // Phase 2: Vernetzung zwischen Rändern (keine Gebäude!)
   isPathFree(buildY, x1, z1, x2, z2) {
     const dx = x2 - x1, dz = z2 - z1;
     const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
@@ -153,12 +162,12 @@ class StreetBuilder {
     return true;
   }
 
-  findValidPath(buildY, x1, z1, x2, z2, maxAttempts = 15) {
-    console.log('🔍 StreetBuilder Suche Umweg...');
+  findValidPath(buildY, x1, z1, x2, z2, maxAttempts = 20) {
+    console.log('🔍 Phase2: Suche Umweg...');
     const offsets = [];
     for (let dist = 1; dist <= maxAttempts; dist++) {
       offsets.push([dist, 0], [-dist, 0], [0, dist], [0, -dist]);
-      if (dist <= 4) {
+      if (dist <= 5) {
         offsets.push([dist, dist], [dist, -dist], [-dist, dist], [-dist, -dist]);
       }
     }
@@ -169,14 +178,14 @@ class StreetBuilder {
       const testX2 = x2 + ox;
       const testZ2 = z2 + oz;
       if (this.isPathFree(buildY, testX1, testZ1, testX2, testZ2)) {
-        console.log(`✅ Umweg gefunden: offset ${ox},${oz}`);
+        console.log(`✅ Phase2 Umweg: offset ${ox},${oz}`);
         return { x1: testX1, z1: testZ1, x2: testX2, z2: testZ2 };
       }
     }
     return null;
   }
 
-  // ✅ GEFIXT: Straßen werden IMMER gebaut
+  // ✅ GEFIXT: Niemals durch Gebäudefläche!
   async buildStreetToBuilding(buildY, fromBuilding, toBuilding) {
     console.log(`🛣️ StreetBuilder: ${fromBuilding.name} -> ${toBuilding.name}`);
     
@@ -185,41 +194,33 @@ class StreetBuilder {
     const doorZ = fromBuilding.z + (fromBuilding.doorPos?.z || 0);
     const fromStartX = doorX;
     const fromStartZ = doorZ - 1;
+    
+    console.log(`🚪 Start: 1 Block vor Tür ${fromStartX},${fromStartZ}`);
 
-    // Phase 1: Gerade zum Fundament-Ende (EIGENES Fundament OK)
-    const foundationExit = this.calculateFoundationExit(doorX, doorZ, fromBuilding);
-    const path1 = {
-      x1: fromStartX, z1: fromStartZ,
-      x2: foundationExit.x, z2: foundationExit.z
-    };
-    
-    console.log(`Phase1: ${path1.x1},${path1.z1} -> ${path1.x2},${path1.z2}`);
-    
-    // ✅ Phase 1 IMMER bauen (eigenes Fundament erlaubt)
-    if (this.isFoundationPathFree(path1.x1, path1.z1, path1.x2, path1.z2, fromBuilding)) {
-      await this.clearAbove(buildY, path1.x1, path1.z1, path1.x2, path1.z2);
-      await this.buildPath(buildY, path1.x1, path1.z1, path1.x2, path1.z2);
-      console.log('✅ Phase1 gebaut');
-    } else {
-      console.log('⚠️ Phase1 übersprungen (fremdes Gebäude)');
+    // Phase 1: Bis ERSTES Gebäude (Randpunkt finden)
+    const fromEdge = await this.buildStreetToBuildingEdge(buildY, fromStartX, fromStartZ, fromBuilding);
+    if (!fromEdge) {
+      console.log('❌ Phase1 fehlgeschlagen!');
+      return;
     }
 
-    // Phase 2: Von Fundament-Ende zu toBuilding 1vorTür
+    // Phase 2 START: 1 Block vor toBuilding-Tür
     const toDoorX = toBuilding.x + (toBuilding.doorPos?.x || 8);
     const toDoorZ = toBuilding.z + (toBuilding.doorPos?.z || 0);
-    const finalToX = toDoorX;
-    const finalToZ = toDoorZ - 1;
+    const toStartX = toDoorX;
+    const toStartZ = toDoorZ - 1;
     
-    let path2 = { x1: path1.x2, z1: path1.z2, x2: finalToX, z2: finalToZ };
-    
-    console.log(`Phase2 Start: ${path2.x1},${path2.z1} -> ${path2.x2},${path2.z2}`);
+    console.log(`🚪 Ziel: 1 Block vor Tür ${toStartX},${toStartZ}`);
+
+    // Phase 2: Vernetzung zwischen Rändern
+    let path2 = { x1: fromEdge.x, z1: fromEdge.z, x2: toStartX, z2: toStartZ };
     
     if (!this.isPathFree(buildY, path2.x1, path2.z1, path2.x2, path2.z2)) {
       path2 = this.findValidPath(buildY, path2.x1, path2.z1, path2.x2, path2.z2);
     }
     
     if (path2) {
-      console.log('✅ Phase2 gebaut');
+      console.log(`✅ Phase2: ${path2.x1},${path2.z1} -> ${path2.x2},${path2.z2}`);
       await this.clearAbove(buildY, path2.x1, path2.z1, path2.x2, path2.z2);
       await this.buildPath(buildY, path2.x1, path2.z1, path2.x2, path2.z2);
       await this.buildStreetLanterns(buildY, path2.x1, path2.z1, path2.x2, path2.z2);
@@ -227,18 +228,19 @@ class StreetBuilder {
       console.log('⚠️ Phase2 übersprungen (kein Pfad)');
     }
 
-    // ✅ IMMER speichern (auch wenn Phase2 fehlschlägt)
+    // Speichern
     this.streets.push({
-      from: { name: `${fromBuilding.name}-exit`, x: path1.x2, z: path1.z2 },
-      to: { name: `${toBuilding.name}-door`, x: finalToX, z: finalToZ },
+      from: { name: `${fromBuilding.name}-edge`, x: fromEdge.x, z: fromEdge.z },
+      to: { name: `${toBuilding.name}-door`, x: toStartX, z: toStartZ },
       buildY,
       timestamp: new Date().toISOString()
     });
     this.saveStreets();
-    console.log('💾 Straße in streets.json gespeichert');
+    console.log('💾 Straße gespeichert');
   }
 
   async buildStreet(buildY, target) {
+    // Flexibler Build-Befehl (unverändert)
     let fromBuilding, toBuilding, targetX, targetZ;
     
     if (typeof target === 'object' && target.x !== undefined && target.z !== undefined) {
@@ -355,7 +357,7 @@ class StreetBuilder {
           const targetZ = currentZ + oz;
           console.log(`🧱 Setze Straßenblock ${targetX},${buildY},${targetZ} stone_bricks`);
           this.bot.chat(`/setblock ${targetX} ${buildY} ${targetZ} stone_bricks`);
-          await new Promise(r => setTimeout(r, 20)); // Erhöhte Delay
+          await new Promise(r => setTimeout(r, 20));
         }
       }
     }
