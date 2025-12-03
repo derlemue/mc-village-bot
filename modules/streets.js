@@ -1,13 +1,15 @@
+// streets.js - KOMPLETTE GEFIXTE VERSION
+
 const fs = require('fs');
 const path = require('path');
 
 class StreetBuilder {
   constructor(bot, villageManager) {
     this.bot = bot;
-    this.villageManager = villageManager; // Referenz zu VillageManager für aktuellen Villages-Status
+    this.villageManager = villageManager;
     this.streetsFile = path.join(process.cwd(), 'data', 'streets.json');
     this.streets = this.loadStreets();
-    this.villages = this.villageManager.villages; // Direkter Zugriff auf aktuelle Dörfer
+    this.villages = this.villageManager.villages;
     this.ensureDataDir();
   }
 
@@ -40,7 +42,6 @@ class StreetBuilder {
     }
   }
 
-  // Prüft komplett die Gebäudefläche inkl. Fundament und Wände
   isPositionInAnyBuilding(x, z) {
     for (const village of this.villages) {
       for (const building of village.buildings) {
@@ -68,10 +69,12 @@ class StreetBuilder {
   }
 
   async buildStreetToBuildingEdge(buildY, startX, startZ, building) {
+    console.log(`🛣️ Phase1: Finde Rand ${startX},${startZ}`);
     const direction = this.getDoorDirection(startX, startZ, building);
     const pathPoints = [];
     let currentX = startX;
     let currentZ = startZ;
+    
     for (let i = 0; i < 32; i++) {
       let safe = true;
       for (let ox = -2; ox <= 2; ox++) {
@@ -84,15 +87,23 @@ class StreetBuilder {
         if (!safe) break;
       }
       if (!safe) {
+        console.log(`🛑 Gebäude bei ${currentX},${currentZ}`);
         break;
       }
       pathPoints.push({ x: currentX, z: currentZ });
       currentX += direction.stepX;
       currentZ += direction.stepZ;
     }
-    if (pathPoints.length === 0) return null;
+    
+    if (pathPoints.length === 0) {
+      console.log('❌ Kein sicherer Startpunkt!');
+      return null;
+    }
+    
     const edgeX = pathPoints[pathPoints.length - 1].x;
     const edgeZ = pathPoints[pathPoints.length - 1].z;
+    console.log(`✅ Rand gefunden: ${edgeX},${edgeZ}`);
+    
     await this.clearAbove(buildY, startX, startZ, edgeX, edgeZ);
     await this.buildPath(buildY, startX, startZ, edgeX, edgeZ);
     return { x: edgeX, z: edgeZ };
@@ -117,6 +128,7 @@ class StreetBuilder {
   }
 
   findValidPath(buildY, x1, z1, x2, z2, maxAttempts = 20) {
+    console.log('🔍 Suche Umweg...');
     const offsets = [];
     for (let dist = 1; dist <= maxAttempts; dist++) {
       offsets.push([dist, 0], [-dist, 0], [0, dist], [0, -dist]);
@@ -130,6 +142,7 @@ class StreetBuilder {
       const testX2 = x2 + ox;
       const testZ2 = z2 + oz;
       if (this.isPathFree(buildY, testX1, testZ1, testX2, testZ2)) {
+        console.log(`✅ Umweg gefunden: offset ${ox},${oz}`);
         return { x1: testX1, z1: testZ1, x2: testX2, z2: testZ2 };
       }
     }
@@ -137,23 +150,43 @@ class StreetBuilder {
   }
 
   async buildStreetToBuilding(buildY, fromBuilding, toBuilding) {
+    console.log(`🛣️ StreetBuilder START: ${fromBuilding.name} -> ${toBuilding.name}`);
+    console.log(`🛣️ From Tür: ${fromBuilding.x + (fromBuilding.doorPos?.x || 8)},${fromBuilding.z + (fromBuilding.doorPos?.z || 0)}`);
+    console.log(`🛣️ To Tür: ${toBuilding.x + (toBuilding.doorPos?.x || 8)},${toBuilding.z + (toBuilding.doorPos?.z || 0)}`);
+    
     const doorX = fromBuilding.x + (fromBuilding.doorPos?.x || 8);
     const doorZ = fromBuilding.z + (fromBuilding.doorPos?.z || 0);
     const fromStartX = doorX;
     const fromStartZ = doorZ - 1;
+    
     const fromEdge = await this.buildStreetToBuildingEdge(buildY, fromStartX, fromStartZ, fromBuilding);
-    if (!fromEdge) return;
+    if (!fromEdge) {
+      console.log('❌ Phase1 fehlgeschlagen');
+      return;
+    }
+    
     const toDoorX = toBuilding.x + (toBuilding.doorPos?.x || 8);
     const toDoorZ = toBuilding.z + (toBuilding.doorPos?.z || 0);
     const toStartX = toDoorX;
     const toStartZ = toDoorZ - 1;
+    
+    console.log(`🛣️ Phase2: ${fromEdge.x},${fromEdge.z} -> ${toStartX},${toStartZ}`);
+    
     let path2 = { x1: fromEdge.x, z1: fromEdge.z, x2: toStartX, z2: toStartZ };
-    if (!this.isPathFree(buildY, path2.x1, path2.z1, path2.x2, path2.z2))
+    if (!this.isPathFree(buildY, path2.x1, path2.z1, path2.x2, path2.z2)) {
       path2 = this.findValidPath(buildY, path2.x1, path2.z1, path2.x2, path2.z2);
-    if (!path2) return;
+    }
+    
+    if (!path2) {
+      console.log('❌ Phase2 kein Pfad gefunden');
+      return;
+    }
+    
+    console.log(`✅ Phase2: Baue Straße ${path2.x1},${path2.z1} -> ${path2.x2},${path2.z2}`);
     await this.clearAbove(buildY, path2.x1, path2.z1, path2.x2, path2.z2);
     await this.buildPath(buildY, path2.x1, path2.z1, path2.x2, path2.z2);
     await this.buildStreetLanterns(buildY, path2.x1, path2.z1, path2.x2, path2.z2);
+    
     this.streets.push({
       from: { name: `${fromBuilding.name}-edge`, x: fromEdge.x, z: fromEdge.z },
       to: { name: `${toBuilding.name}-door`, x: toStartX, z: toStartZ },
@@ -161,6 +194,7 @@ class StreetBuilder {
       timestamp: new Date().toISOString()
     });
     this.saveStreets();
+    console.log('💾 Straße gespeichert');
   }
 
   async buildStreet(buildY, target) {
@@ -207,6 +241,7 @@ class StreetBuilder {
   }
 
   async buildLanternPosts(buildY, building) {
+    console.log(`🗼 Baue Laternen um ${building.name}`);
     const width = building.width || 16;
     const depth = building.depth || 16;
     const interval = 6, offset = 1;
@@ -248,6 +283,7 @@ class StreetBuilder {
   }
 
   async buildPath(buildY, x1, z1, x2, z2) {
+    console.log(`🧱 Baue Straße ${x1},${z1} -> ${x2},${z2}`);
     const dx = x2 - x1, dz = z2 - z1;
     const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
     for (let step = 0; step <= totalSteps; step++) {
@@ -261,9 +297,11 @@ class StreetBuilder {
         }
       }
     }
+    console.log(`✅ Straße fertig`);
   }
 
   async buildStreetLanterns(buildY, x1, z1, x2, z2) {
+    console.log(`💡 Baue Straßenlaternen`);
     const dx = x2 - x1, dz = z2 - z1;
     const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
     const interval = 6;

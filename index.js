@@ -1,3 +1,5 @@
+// index.js - KOMPLETTE GEFIXTE VERSION
+
 require('dotenv').config();
 
 const mineflayer = require('mineflayer');
@@ -121,28 +123,45 @@ async function connectBot() {
                 
                 // ✅ StreetBuilder synchronisieren
                 streetBuilder.villages = villageManager.villages;
-                console.log('[Index] 🔄 StreetBuilder villages reloaded');
+                console.log('[Index] 🔄 StreetBuilder villages reloaded - BAUE STRAßE!');
                 
                 successCount++;
 
+                // ✅ STRAßE IMMER BAUEN (wenn previousBuilding existiert)
                 if (previousBuilding) {
-                  bot.chat(`🛣️ Straße zu ${building.name}...`);
-                  await streetBuilder.buildStreetToBuilding(y, previousBuilding, building);
-                  await streetBuilder.buildLanternPosts(y, building);
+                  console.log(`[Index] 🛣️ STARTE Straßenbau: ${previousBuilding.name} -> ${building.name}`);
+                  try {
+                    await streetBuilder.buildStreetToBuilding(y, previousBuilding, building);
+                    console.log(`[Index] ✅ Straße gebaut: ${previousBuilding.name} -> ${building.name}`);
+                  } catch (streetErr) {
+                    console.error('[Index] ❌ Straßenbau Fehler:', streetErr.message, streetErr.stack);
+                  }
+                  
+                  // Laternen IMMER bauen
+                  try {
+                    await streetBuilder.buildLanternPosts(y, building);
+                    console.log(`[Index] ✅ Laternen um ${building.name} gebaut`);
+                  } catch (lanternErr) {
+                    console.error('[Index] ❌ Laternen Fehler:', lanternErr.message);
+                  }
+                } else {
+                  console.log(`[Index] ⏭️ Erstes Gebäude ${building.name} - keine Straße nötig`);
                 }
 
-                previousBuilding = building;
+                previousBuilding = building; // ✅ WICHTIG: Update!
                 bot.chat(`✅ ${building.name}`);
                 
                 if (global.GLOBAL_IS_BUILDING && i < count - 1) {
                   bot.chat('🏠 Zurück...');
                   await movement.moveBackToStart();
                 }
+              } else {
+                console.log('[Index] ❌ Gebäude-Build fehlgeschlagen');
               }
             }
             bot.chat(`🎉 ${successCount}/${count} fertig!`);
           } catch (err) {
-            console.error('[Build Error]:', err);
+            console.error('[Build Error]:', err.message, err.stack);
             bot.chat('❌ Build Fehler: ' + err.message);
           } finally {
             global.GLOBAL_IS_BUILDING = false;
@@ -150,7 +169,7 @@ async function connectBot() {
         }
       });
     } catch (err) {
-      console.error('[Spawn Error]:', err);
+      console.error('[Spawn Error]:', err.message, err.stack);
     }
   });
 }
