@@ -4,189 +4,117 @@
 > Mineflayer + Docker + Node.js
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js Version](https://img.shields.io/badge/Node.js-16%2B-green)](https://nodejs.org)
-[![Minecraft Version](https://img.shields.io/badge/Minecraft-1.20.1-brightgreen)](https://www.minecraft.net)
-[![Status](https://img.shields.io/badge/Status-Active%20Development-blue)](#)
+[![Node.js](https://img.shields.io/badge/Node.js-16%2B-green.svg)](https://nodejs.org)
+[![Minecraft](https://img.shields.io/badge/Minecraft-1.20.1-brightgreen.svg)](https://minecraft.wiki)
+[![Status](https://img.shields.io/badge/Status-Active%20Development-blue.svg)]()
 
 ## 🎯 Was macht der Bot?
 
-MC Village Bot V2 ist ein vollautomatisierter **Minecraft-Dorf-Konstruktor**, der komplexe Dörfer mit verschiedenen Gebäuden, Straßen und Terraforming aus **WorldEdit-Schematics** (.schem Dateien) erstellt.
+MC Village Bot V2 ist ein vollautomatisierter **Minecraft-Dorf-Konstruktor**, der komplexe Dörfer mit Gebäuden, Straßen und Terrain-Vorbereitung aus **WorldEdit-Schematics** (.schem) erstellt.
 
 **Kernfunktionen:**
-- ✅ **Automatisches Terraforming** — Ebnet Terrain, erstellt Fundamente
-- ✅ **Schematic-Verarbeitung** — Konvertiert .schem → JavaScript-Schematics
-- ✅ **Gebäude-Konstruktion** — Platziert Gebäude mit Pathfinding
-- ✅ **Straßen & Dekoration** — Erstellt Wege und Beleuchtung (Laternen)
-- ✅ **Dorf-Management** — Koordiniert mehrere Gebäude
-- ✅ **Discord-Integration** — Status-Updates via Webhook
-- ✅ **Docker-Ready** — Production-ready mit Docker Compose
-- ✅ **Chat-Steuerung** — Einfache Minecraft-Chat-Befehle
-
----
+- ✅ **Modulare Architektur** — terrain.js, streets.js, builder.js, villageManager.js
+- ✅ **Schematic-Verarbeitung** — .schem → JavaScript Schematics
+- ✅ **Chat-Steuerung** — Minecraft-Chat-Befehle
+- ✅ **Docker-Ready** — Production mit Docker Compose
+- ✅ **Pathfinding** — Intelligente Bot-Bewegungen
+- ✅ **Discord-Webhooks** — Status-Updates (optional)
 
 ## 📋 Voraussetzungen
 
 ### System
-- **Node.js** 16.x oder höher
+- **Node.js** 16+
 - **npm** oder **yarn**
-- **Docker** + **Docker Compose** (optional, empfohlen)
-- **Minecraft Server** 1.20.1 (Vanilla oder compatible)
+- **Docker** + **Docker Compose** (empfohlen)
+- **Minecraft Server** 1.20.1
 
 ### Minecraft Setup
-- Bot-Account mit Zugriff auf den Server
-- Schematics (.schem Dateien) im `schematics/` Ordner
-- Genug Platz für Gebäude und Terraforming
-
----
+- Bot-Account mit Server-Zugang
+- WorldEdit-Schematics (.schem) im `schematics/` Ordner
+- Admin-Rechte für Bot-Befehle
 
 ## 🚀 Schnellstart
 
 ### 1. Repository klonen
-
 ```bash
 git clone https://github.com/derlemue/mc-village-bot.git
 cd mc-village-bot
 ```
 
 ### 2. Abhängigkeiten installieren
-
 ```bash
 npm install
 ```
 
-### 3. Umgebungsvariablen konfigurieren
-
-Erstelle eine `.env` Datei im Projektverzeichnis:
-
-```env
-# Minecraft Server
-MC_HOST=localhost
-MC_PORT=25565
-MC_USERNAME=VillageBot
-MC_PASSWORD=offline
-
-# Server-Administration
-ADMIN_UUID=dein-uuid-hier
-RENDER_DISTANCE=8
-VIEW_DISTANCE=10
-
-# Discord Webhook (optional)
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/xxx/yyy
-
-# Logging
-LOG_LEVEL=info
-DEBUG=false
+### 3. Konfiguration
+```bash
+cp .env.example .env
+# Bearbeite .env mit deinen Server-Daten
 ```
 
-**Wichtige Variablen:**
-- `MC_HOST`: IP oder Hostname des Minecraft-Servers
-- `MC_PORT`: Port des Servers (default: 25565)
-- `MC_USERNAME`: Name des Bot-Accounts
-- `MC_PASSWORD`: Passwort (bei offline-mode: beliebig)
-- `DISCORD_WEBHOOK_URL`: Optional für Status-Meldungen
-
-### 4. Bot starten (lokal)
-
+### 4. Starten
+**Lokal:**
 ```bash
 npm start
-```
-
-Oder im Development-Modus mit auto-reload:
-
-```bash
+# oder Development-Modus
 npm run dev
 ```
 
-Der Bot verbindet sich zum Server und gibt Meldungen in der Konsole aus.
-
----
+**Docker:**
+```bash
+docker-compose up -d
+docker-compose logs -f bot
+```
 
 ## 📡 Chat-Befehle
 
-Der Bot reagiert auf Chat-Nachrichten mit folgendem Format:
-
-### Syntax
+**Hinweis**: Die genaue Befehlssyntax sollte aus `src/bot.js` überprüft werden!
 
 ```
-!build <gebäude-name> <x> <z>
-!terrain <x1> <z1> <x2> <z2>
-!streets <x1> <z1> <x2> <z2>
-!village <x> <z>
-!status
+!build <gebäude> <x> <z>     # Gebäude platzieren
+!terrain <x1> <z1> <x2> <z2> # Terrain ebnen
+!streets <x1> <z1> <x2> <z2> # Straßen bauen
+!village <x> <z>             # Komplettes Dorf
+!status                      # Bot-Status
+!help                        # Hilfe anzeigen
 ```
 
-### Beispiele
+**Admin-only**: `ADMIN_UUID` in `.env` setzen.
 
-**Einzelnes Gebäude platzieren:**
-```
-!build house_1 100 100
-```
-
-**Terrain ebnen (rechteck von [100,100] bis [200,200]):**
-```
-!terrain 100 100 200 200
-```
-
-**Straßen bauen:**
-```
-!streets 100 100 200 200
-```
-
-**Ganzes Dorf erstellen:**
-```
-!village 100 100
-```
-
-**Status abrufen:**
-```
-!status
-```
-
----
-
-## 🏗️ Architektur & Module
-
-MC Village Bot V2 ist modular aufgebaut für einfache Wartung und Erweiterung:
+## 🏗️ Code-Struktur
 
 ```
 mc-village-bot/
 ├── src/
-│   ├── bot.js              # Haupteinstiegspunkt, Chat-Handler
-│   ├── config.js           # Konfiguration & Umgebungsvariablen
-│   ├── logger.js           # Logging-System
+│   ├── bot.js              # Chat-Handler (Befehle hier)
+│   ├── config.js           # Konfiguration
+│   ├── logger.js           # Logging
 │   ├── modules/
-│   │   ├── terrain.js      # Terraforming
-│   │   ├── streets.js      # Straßenbau
+│   │   ├── terrain.js      # Terrain-Vorbereitung
+│   │   ├── streets.js      # Straßen & Laternen
 │   │   ├── builder.js      # Gebäude-Konstruktion
-│   │   └── villageManager.js # Dorf-Verwaltung
-│   ├── utils/
-│   │   ├── schematicLoader.js # .schem → JS Konvertierung
-│   │   ├── pathfinding.js    # A* Pathfinding
-│   │   └── helpers.js        # Hilfsfunktionen
-│   └── discord/
-│       └── webhooks.js     # Discord-Integration
+│   │   └── villageManager.js # Dorf-Management
+│   └── utils/
+│       ├── schematicLoader.js # .schem Parser
+│       └── pathfinding.js     # A* Navigation
 ├── schematics/             # WorldEdit .schem Dateien
-│   ├── house_1.schem
-│   ├── house_2.schem
-│   └── ...
-├── .env                    # Umgebungsvariablen
-├── docker-compose.yml      # Docker-Konfiguration
-├── Dockerfile              # Container-Image
-├── package.json
-└── README.md
+├── docker-compose.yml
+├── Dockerfile
+└── package.json
 ```
 
----
-
 ## 🔧 Module-Übersicht
+
+| Modul | Hauptfunktionen |
+|-------|-----------------|
+| **terrain.js** | `flatTerrain()`, `createFoundation()`, `smoothTerrain()` |
+| **streets.js** | `buildStreet()`, `placeStreetLights()`, `createRoad()` |
+| **builder.js** | `buildStructure()`, `placeSchematic()`, `isAreaClear()` |
+| **villageManager.js** | `buildVillage()`, `planVillage()`, `calculateSpacing()` |
 
 ### terrain.js - Terrain-Vorbereitung
 
 Ebnet und bereitet Terrain vor:
-
-- **`flatTerrain(x, z, width, height, height_level)`** — Erstellt ebene Fläche
-- **`createFoundation(x, z, width, height)`** — Stellt Fundament bereit
-- **`smoothTerrain(x, z, radius)`** — Glättet Übergänge
 
 ```javascript
 const { flatTerrain } = require('./modules/terrain');
@@ -196,10 +124,6 @@ await flatTerrain(bot, 100, 100, 50, 50, 65);
 ### streets.js - Straßen & Laternen
 
 Erstellt Straßen und Beleuchtung:
-
-- **`buildStreet(x, z, direction, length, width)`** — Straße bauen
-- **`placeStreetLights(x, z, spacing)`** — Laternen platzieren
-- **`createRoad(x1, z1, x2, z2)`** — Direkte Verbindung
 
 ```javascript
 const { buildStreet, placeStreetLights } = require('./modules/streets');
@@ -211,10 +135,6 @@ await placeStreetLights(bot, 100, 100, 5);
 
 Platziert Gebäude aus Schematics:
 
-- **`placeSchematic(x, y, z, schematicData)`** — Schematic platzieren
-- **`buildStructure(name, x, z)`** — Gebäude mit Name laden & bauen
-- **`isAreaClear(x, z, width, height)`** — Prüft ob Platz frei ist
-
 ```javascript
 const { buildStructure } = require('./modules/builder');
 await buildStructure(bot, 'house_1', 100, 100);
@@ -224,10 +144,6 @@ await buildStructure(bot, 'house_1', 100, 100);
 
 Koordiniert komplette Dörfer:
 
-- **`planVillage(x, z, config)`** — Plant Dorf-Layout
-- **`buildVillage(x, z)`** — Baut ganzes Dorf
-- **`calculateSpacing(num_buildings, area_width)`** — Berechnet Abstände
-
 ```javascript
 const { buildVillage } = require('./modules/villageManager');
 await buildVillage(bot, 100, 100, {
@@ -235,8 +151,6 @@ await buildVillage(bot, 100, 100, {
   spacing: 20
 });
 ```
-
----
 
 ## 🏗️ Workflow: So läuft der Bau ab
 
@@ -267,8 +181,6 @@ await buildVillage(bot, 100, 100, {
    └─> Discord Webhook (optional)
 ```
 
----
-
 ## ⚙️ Template-Struktur
 
 Schematics (.schem Dateien) werden in JavaScript-Objects konvertiert:
@@ -290,13 +202,11 @@ Schematics (.schem Dateien) werden in JavaScript-Objects konvertiert:
 }
 ```
 
-**Schematic konvertieren (Python):**
+**Schematic konvertieren (falls Python-Skript vorhanden):**
 
 ```bash
 python3 utils/schem_to_js.py schematics/house_1.schem > house_1.js
 ```
-
----
 
 ## 🐳 Docker Betrieb
 
@@ -363,7 +273,32 @@ COPY .env .env
 CMD ["node", "src/bot.js"]
 ```
 
----
+## ⚙️ .env Konfiguration
+
+```env
+# Minecraft Server
+MC_HOST=localhost
+MC_PORT=25565
+MC_USERNAME=VillageBot
+MC_PASSWORD=offline
+
+# Administration
+ADMIN_UUID=deine-uuid-hier
+RENDER_DISTANCE=8
+VIEW_DISTANCE=10
+
+# Optionale Features
+DISCORD_WEBHOOK_URL=
+LOG_LEVEL=info
+DEBUG=false
+```
+
+**Wichtige Variablen:**
+- `MC_HOST`: IP oder Hostname des Minecraft-Servers
+- `MC_PORT`: Port des Servers (default: 25565)
+- `MC_USERNAME`: Name des Bot-Accounts
+- `MC_PASSWORD`: Passwort (bei offline-mode: beliebig)
+- `ADMIN_UUID`: UUID für Admin-Befehle
 
 ## 📊 Persistent Storage
 
@@ -377,13 +312,11 @@ Bot speichert Daten in Volumes:
 
 1. Schematic in Minecraft erstellen (WorldEdit)
 2. In `schematics/` folder speichern
-3. Mit Python konvertieren:
+3. Mit Python konvertieren (falls Skript vorhanden):
    ```bash
    python3 utils/schem_to_js.py schematics/new_building.schem
    ```
 4. Bot neustarten oder Schematic im Chat laden
-
----
 
 ## 🔧 Troubleshooting
 
@@ -465,8 +398,6 @@ Bot speichert Daten in Volumes:
    docker-compose restart bot
    ```
 
----
-
 ## 📝 Development & Änderungen
 
 ### Neues Template hinzufügen
@@ -503,15 +434,11 @@ npm start
 - Pull Requests für größere Features
 - Logs mit `logger.debug()` hinzufügen
 
----
-
 ## 📄 Lizenzen & Attributionen
 
 - **MC Village Bot** — MIT License
 - **Mineflayer** — MIT License (Bot-Framework)
 - **WorldEdit** — GNU GPL v3 (Schematic-Format)
-
----
 
 ## 📧 Support & Dokumentation
 
