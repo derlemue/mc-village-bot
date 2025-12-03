@@ -50,7 +50,7 @@ class VillageManager {
         centerX, centerY, centerZ,
         size: 100, // Startgröße
         buildings: [],
-        maxBuildings: 150
+        maxBuildings: 250
       };
       this.villages.push(village);
       console.log(`[VillageManager] ✨ Neues Dorf: ${village.id}`);
