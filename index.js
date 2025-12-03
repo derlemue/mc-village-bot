@@ -127,8 +127,24 @@ async function connectBot() {
                 
                 successCount++;
 
-                // ✅ STRAßE IMMER BAUEN (wenn previousBuilding existiert)
-                if (previousBuilding) {
+                // ✅ ERSTES GEBÄUDE: Straße zum Zentrum
+                if (successCount === 1) {
+                  console.log(`[Index] 🏘️ ERSTES GEBÄUDE: Baue Straße zum Village-Zentrum`);
+                  try {
+                    await streetBuilder.buildStreetToVillageCentrum(y, building, village);
+                    console.log(`[Index] ✅ Straße zu Zentrum gebaut`);
+                  } catch (err) {
+                    console.error('[Index] ❌ Fehler bei Zentrum-Straße:', err.message, err.stack);
+                  }
+                  
+                  try {
+                    await streetBuilder.buildLanternPosts(y, building);
+                    console.log(`[Index] ✅ Laternen um ${building.name} gebaut`);
+                  } catch (lanternErr) {
+                    console.error('[Index] ❌ Laternen Fehler:', lanternErr.message);
+                  }
+                } else if (previousBuilding) {
+                  // ✅ WEITERE GEBÄUDE: Straße zum vorherigen
                   console.log(`[Index] 🛣️ STARTE Straßenbau: ${previousBuilding.name} -> ${building.name}`);
                   try {
                     await streetBuilder.buildStreetToBuilding(y, previousBuilding, building);
@@ -137,7 +153,6 @@ async function connectBot() {
                     console.error('[Index] ❌ Straßenbau Fehler:', streetErr.message, streetErr.stack);
                   }
                   
-                  // Laternen IMMER bauen
                   try {
                     await streetBuilder.buildLanternPosts(y, building);
                     console.log(`[Index] ✅ Laternen um ${building.name} gebaut`);
@@ -145,7 +160,7 @@ async function connectBot() {
                     console.error('[Index] ❌ Laternen Fehler:', lanternErr.message);
                   }
                 } else {
-                  console.log(`[Index] ⏭️ Erstes Gebäude ${building.name} - keine Straße nötig`);
+                  console.log(`[Index] ⏭️ Gebäude ${building.name} ohne Straße (Erstes oder Fehler)`);
                 }
 
                 previousBuilding = building; // ✅ WICHTIG: Update!
@@ -157,6 +172,7 @@ async function connectBot() {
                 }
               } else {
                 console.log('[Index] ❌ Gebäude-Build fehlgeschlagen');
+                bot.chat(`❌ Fehler beim Bauen von ${building.name}`);
               }
             }
             bot.chat(`🎉 ${successCount}/${count} fertig!`);

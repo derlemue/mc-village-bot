@@ -1,4 +1,4 @@
-// streets.js - KOMPLETTE GEFIXTE VERSION
+// streets.js - KOMPLETT GEFIXT FÜR ERSTES GEBÄUDE + FALLBACK
 
 const fs = require('fs');
 const path = require('path');
@@ -68,8 +68,53 @@ class StreetBuilder {
     return { stepX: 0, stepZ: 1 };
   }
 
+  // ✅ FALLBACK: Finde nächsten sicheren Punkt am Rand
+  findNearestSafePoint(buildY, doorX, doorZ, building) {
+    console.log(`🔍 FALLBACK: Suche nächsten sicheren Punkt`);
+    const width = building.width || 16;
+    const depth = building.depth || 16;
+    
+    const candidates = [
+      // Vorderseite
+      { x: doorX, z: building.z - 1, dist: 0 },
+      // Linke Seite
+      { x: building.x - 1, z: doorZ, dist: 0 },
+      // Rechte Seite
+      { x: building.x + width, z: doorZ, dist: 0 },
+      // Rückseite
+      { x: doorX, z: building.z + depth, dist: 0 }
+    ];
+
+    // Berechne Distanzen und filtere sichere Punkte
+    const safePoints = candidates.filter(p => {
+      for (let ox = -2; ox <= 2; ox++) {
+        for (let oz = -1; oz <= 1; oz++) {
+          if (this.isPositionInAnyBuilding(p.x + ox, p.z + oz)) {
+            return false;
+          }
+        }
+      }
+      return true;
+    });
+
+    if (safePoints.length === 0) {
+      console.log('❌ Kein sicherer Punkt gefunden! Verwende Tür-Position');
+      return { x: doorX, z: doorZ - 1 };
+    }
+
+    // Sortiere nach Distanz zur Tür
+    safePoints.forEach(p => {
+      p.dist = Math.abs(p.x - doorX) + Math.abs(p.z - doorZ);
+    });
+    safePoints.sort((a, b) => a.dist - b.dist);
+
+    const nearest = safePoints[0];
+    console.log(`✅ Sicherer Punkt gefunden: ${nearest.x},${nearest.z}`);
+    return { x: nearest.x, z: nearest.z };
+  }
+
   async buildStreetToBuildingEdge(buildY, startX, startZ, building) {
-    console.log(`🛣️ Phase1: Finde Rand ${startX},${startZ}`);
+    console.log(`🛣️ Phase1: Finde Rand von ${startX},${startZ}`);
     const direction = this.getDoorDirection(startX, startZ, building);
     const pathPoints = [];
     let currentX = startX;
@@ -96,8 +141,8 @@ class StreetBuilder {
     }
     
     if (pathPoints.length === 0) {
-      console.log('❌ Kein sicherer Startpunkt!');
-      return null;
+      console.log('❌ Kein Rand gefunden - verwende nächsten sicheren Punkt');
+      return null; // FALLBACK wird woanders behandelt
     }
     
     const edgeX = pathPoints[pathPoints.length - 1].x;
@@ -146,23 +191,74 @@ class StreetBuilder {
         return { x1: testX1, z1: testZ1, x2: testX2, z2: testZ2 };
       }
     }
+    console.log('❌ Kein Umweg gefunden!');
     return null;
+  }
+
+  // ✅ NEU: Straße vom Gebäude zum Village-Zentrum
+  async buildStreetToVillageCentrum(buildY, building, village) {
+    console.log(`🛣️ ERSTES GEBÄUDE: Baue Straße zu Village-Zentrum`);
+    
+    const doorX = building.x + (building.doorPos?.x || 8);
+    const doorZ = building.z + (building.doorPos?.z || 0);
+    const fromStartX = doorX;
+    const fromStartZ = doorZ - 1;
+
+    const centrumX = village.centerX;
+    const centrumZ = village.centerZ;
+
+    console.log(`📍 Von: ${fromStartX},${fromStartZ} -> Zentrum: ${centrumX},${centrumZ}`);
+
+    // Versuche Phase 1
+    let fromEdge = await this.buildStreetToBuildingEdge(buildY, fromStartX, fromStartZ, building);
+    
+    // ✅ FALLBACK: Wenn kein Rand gefunden, verwende nächsten sicheren Punkt
+    if (!fromEdge) {
+      console.log('⚠️ Phase1 Fallback: Verwende nächsten sicheren Punkt');
+      fromEdge = this.findNearestSafePoint(buildY, doorX, doorZ, building);
+    }
+
+    console.log(`🛣️ Phase2: ${fromEdge.x},${fromEdge.z} -> ${centrumX},${centrumZ}`);
+
+    let path2 = { x1: fromEdge.x, z1: fromEdge.z, x2: centrumX, z2: centrumZ };
+    if (!this.isPathFree(buildY, path2.x1, path2.z1, path2.x2, path2.z2)) {
+      path2 = this.findValidPath(buildY, path2.x1, path2.z1, path2.x2, path2.z2);
+    }
+
+    if (!path2) {
+      console.log('❌ Straße zum Zentrum fehlgeschlagen');
+      return;
+    }
+
+    console.log(`✅ Phase2: Baue Straße ${path2.x1},${path2.z1} -> ${path2.x2},${path2.z2}`);
+    await this.clearAbove(buildY, path2.x1, path2.z1, path2.x2, path2.z2);
+    await this.buildPath(buildY, path2.x1, path2.z1, path2.x2, path2.z2);
+    await this.buildStreetLanterns(buildY, path2.x1, path2.z1, path2.x2, path2.z2);
+
+    this.streets.push({
+      from: { name: `${building.name}-edge`, x: fromEdge.x, z: fromEdge.z },
+      to: { name: 'village-center', x: centrumX, z: centrumZ },
+      buildY,
+      timestamp: new Date().toISOString()
+    });
+    this.saveStreets();
+    console.log('💾 Straße zu Zentrum gespeichert');
   }
 
   async buildStreetToBuilding(buildY, fromBuilding, toBuilding) {
     console.log(`🛣️ StreetBuilder START: ${fromBuilding.name} -> ${toBuilding.name}`);
-    console.log(`🛣️ From Tür: ${fromBuilding.x + (fromBuilding.doorPos?.x || 8)},${fromBuilding.z + (fromBuilding.doorPos?.z || 0)}`);
-    console.log(`🛣️ To Tür: ${toBuilding.x + (toBuilding.doorPos?.x || 8)},${toBuilding.z + (toBuilding.doorPos?.z || 0)}`);
     
     const doorX = fromBuilding.x + (fromBuilding.doorPos?.x || 8);
     const doorZ = fromBuilding.z + (fromBuilding.doorPos?.z || 0);
     const fromStartX = doorX;
     const fromStartZ = doorZ - 1;
     
-    const fromEdge = await this.buildStreetToBuildingEdge(buildY, fromStartX, fromStartZ, fromBuilding);
+    let fromEdge = await this.buildStreetToBuildingEdge(buildY, fromStartX, fromStartZ, fromBuilding);
+    
+    // ✅ FALLBACK: Wenn kein Rand, verwende nächsten sicheren Punkt
     if (!fromEdge) {
-      console.log('❌ Phase1 fehlgeschlagen');
-      return;
+      console.log('⚠️ Fallback: Verwende nächsten sicheren Punkt');
+      fromEdge = this.findNearestSafePoint(buildY, doorX, doorZ, fromBuilding);
     }
     
     const toDoorX = toBuilding.x + (toBuilding.doorPos?.x || 8);
