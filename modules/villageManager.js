@@ -1,5 +1,5 @@
 const fs = require('fs');
-const path = require('path');
+const path = require('path');  // ✅ FEHLTETE IMPORT!
 
 class VillageManager {
   constructor() {
@@ -10,7 +10,9 @@ class VillageManager {
 
   _ensureDataDir() {
     const dataDir = path.dirname(this.villagesFile);
-    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
   }
 
   _loadVillages() {
@@ -37,10 +39,8 @@ class VillageManager {
 
   findOrCreateVillage(centerX, centerY, centerZ) {
     console.log(`[VillageManager] 🏘️ Prüfe Dorf bei (${centerX}, ${centerY}, ${centerZ})`);
-    
-    // Dorf finden oder neu erstellen
-    let village = this.villages.find(v => 
-      Math.abs(v.centerX - centerX) < v.size && 
+    let village = this.villages.find(v =>
+      Math.abs(v.centerX - centerX) < v.size &&
       Math.abs(v.centerZ - centerZ) < v.size
     );
 
@@ -48,7 +48,7 @@ class VillageManager {
       village = {
         id: 'village_' + Date.now(),
         centerX, centerY, centerZ,
-        size: 100, // Startgröße
+        size: 100,
         buildings: [],
         maxBuildings: 250
       };
@@ -59,7 +59,6 @@ class VillageManager {
     } else {
       console.log(`[VillageManager] ✅ Dorf existiert: ${village.id}`);
     }
-
     return village;
   }
 
@@ -67,12 +66,10 @@ class VillageManager {
     for (let attempt = 1; attempt <= attempts; attempt++) {
       const offsetX = (Math.random() - 0.5) * village.size;
       const offsetZ = (Math.random() - 0.5) * village.size;
-      
       const posX = Math.floor(village.centerX + offsetX - templateWidth/2);
       const posZ = Math.floor(village.centerZ + offsetZ - templateDepth/2);
-      
-      // Prüfe Kollision mit anderen Gebäuden
-      const collision = village.buildings.some(b => 
+
+      const collision = village.buildings.some(b =>
         Math.abs(b.x - posX) < (b.width + templateWidth)/2 + 10 &&
         Math.abs(b.z - posZ) < (b.depth + templateDepth)/2 + 10
       );
@@ -81,20 +78,31 @@ class VillageManager {
         console.log(`[VillageManager] ✅ Position bei (${posX}, ${posZ}) nach ${attempt} Versuchen`);
         return { x: posX, z: posZ };
       }
+
+      // Dorf erweitern falls voll
+      if (attempt === attempts) {
+        village.size += 100;
+        console.log(`[VillageManager] 📈 Erweitere Dorf-Fläche: ${village.size - 100} → ${village.size}`);
+        this.saveVillages();
+        return this.findFreePosition(village, templateWidth, templateDepth);
+      }
     }
-    
-    // Dorf erweitern falls voll
-    village.size += 100;
-    console.log(`[VillageManager] 📈 Erweitere Dorf-Fläche: ${village.size - 100} → ${village.size}`);
-    this.saveVillages();
-    
-    return this.findFreePosition(village, templateWidth, templateDepth);
   }
 
   addBuildingToVillage(village, building) {
     village.buildings.push(building);
     console.log(`[VillageManager] 🏘️ ${building.name} zu "${village.id}" hinzugefügt (${village.buildings.length}/${village.maxBuildings})`);
     this.saveVillages();
+  }
+
+  // ✅ NEU: Für direkte Synchronisation mit StreetBuilder
+  getVillages() {
+    return this.villages;
+  }
+
+  reloadVillages() {
+    this.villages = this._loadVillages();
+    console.log('[VillageManager] 🔄 Villages reloaded');
   }
 }
 
