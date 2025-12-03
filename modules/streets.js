@@ -1,4 +1,4 @@
-// streets.js - KOMPLETT GEFIXT FÜR ERSTES GEBÄUDE + FALLBACK
+// streets.js - KOMPLETT GEFIXT: SCHMALERE STRAßEN (3x1 statt 5x3) + FUNDAMENT CHECK
 
 const fs = require('fs');
 const path = require('path');
@@ -42,6 +42,29 @@ class StreetBuilder {
     }
   }
 
+  // ✅ NEU: Prüft ob Position auf bestehender Straße liegt (3x1 Breite)
+  isPositionOnStreet(x, z) {
+    for (const street of this.streets) {
+      const dx = street.to.x - street.from.x;
+      const dz = street.to.z - street.from.z;
+      const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
+      
+      for (let step = 0; step <= totalSteps; step++) {
+        const progress = step / totalSteps;
+        const streetX = Math.round(street.from.x + dx * progress);
+        const streetZ = Math.round(street.from.z + dz * progress);
+        
+        // ✅ SCHMALERE PRÜFUNG: 3x1 statt 5x3
+        for (let ox = -1; ox <= 1; ox++) {
+          if (x === streetX + ox && z === streetZ) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
   isPositionInAnyBuilding(x, z) {
     for (const village of this.villages) {
       for (const building of village.buildings) {
@@ -68,30 +91,23 @@ class StreetBuilder {
     return { stepX: 0, stepZ: 1 };
   }
 
-  // ✅ FALLBACK: Finde nächsten sicheren Punkt am Rand
   findNearestSafePoint(buildY, doorX, doorZ, building) {
     console.log(`🔍 FALLBACK: Suche nächsten sicheren Punkt`);
     const width = building.width || 16;
     const depth = building.depth || 16;
     
     const candidates = [
-      // Vorderseite
       { x: doorX, z: building.z - 1, dist: 0 },
-      // Linke Seite
       { x: building.x - 1, z: doorZ, dist: 0 },
-      // Rechte Seite
       { x: building.x + width, z: doorZ, dist: 0 },
-      // Rückseite
       { x: doorX, z: building.z + depth, dist: 0 }
     ];
 
-    // Berechne Distanzen und filtere sichere Punkte
     const safePoints = candidates.filter(p => {
-      for (let ox = -2; ox <= 2; ox++) {
-        for (let oz = -1; oz <= 1; oz++) {
-          if (this.isPositionInAnyBuilding(p.x + ox, p.z + oz)) {
-            return false;
-          }
+      // ✅ SCHMALERE PRÜFUNG: 3x1
+      for (let ox = -1; ox <= 1; ox++) {
+        if (this.isPositionInAnyBuilding(p.x + ox, p.z) || this.isPositionOnStreet(p.x + ox, p.z)) {
+          return false;
         }
       }
       return true;
@@ -102,7 +118,6 @@ class StreetBuilder {
       return { x: doorX, z: doorZ - 1 };
     }
 
-    // Sortiere nach Distanz zur Tür
     safePoints.forEach(p => {
       p.dist = Math.abs(p.x - doorX) + Math.abs(p.z - doorZ);
     });
@@ -122,14 +137,12 @@ class StreetBuilder {
     
     for (let i = 0; i < 32; i++) {
       let safe = true;
-      for (let ox = -2; ox <= 2; ox++) {
-        for (let oz = -1; oz <= 1; oz++) {
-          if (this.isPositionInAnyBuilding(currentX + ox, currentZ + oz)) {
-            safe = false;
-            break;
-          }
+      // ✅ SCHMALERE PRÜFUNG: 3x1
+      for (let ox = -1; ox <= 1; ox++) {
+        if (this.isPositionInAnyBuilding(currentX + ox, currentZ)) {
+          safe = false;
+          break;
         }
-        if (!safe) break;
       }
       if (!safe) {
         console.log(`🛑 Gebäude bei ${currentX},${currentZ}`);
@@ -142,7 +155,7 @@ class StreetBuilder {
     
     if (pathPoints.length === 0) {
       console.log('❌ Kein Rand gefunden - verwende nächsten sicheren Punkt');
-      return null; // FALLBACK wird woanders behandelt
+      return null;
     }
     
     const edgeX = pathPoints[pathPoints.length - 1].x;
@@ -161,11 +174,10 @@ class StreetBuilder {
       const progress = step / totalSteps;
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
-      for (let ox = -2; ox <= 2; ox++) {
-        for (let oz = -1; oz <= 1; oz++) {
-          if (this.isPositionInAnyBuilding(currentX + ox, currentZ + oz)) {
-            return false;
-          }
+      // ✅ SCHMALERE PRÜFUNG: 3x1
+      for (let ox = -1; ox <= 1; ox++) {
+        if (this.isPositionInAnyBuilding(currentX + ox, currentZ)) {
+          return false;
         }
       }
     }
@@ -195,7 +207,6 @@ class StreetBuilder {
     return null;
   }
 
-  // ✅ NEU: Straße vom Gebäude zum Village-Zentrum
   async buildStreetToVillageCentrum(buildY, building, village) {
     console.log(`🛣️ ERSTES GEBÄUDE: Baue Straße zu Village-Zentrum`);
     
@@ -209,10 +220,8 @@ class StreetBuilder {
 
     console.log(`📍 Von: ${fromStartX},${fromStartZ} -> Zentrum: ${centrumX},${centrumZ}`);
 
-    // Versuche Phase 1
     let fromEdge = await this.buildStreetToBuildingEdge(buildY, fromStartX, fromStartZ, building);
     
-    // ✅ FALLBACK: Wenn kein Rand gefunden, verwende nächsten sicheren Punkt
     if (!fromEdge) {
       console.log('⚠️ Phase1 Fallback: Verwende nächsten sicheren Punkt');
       fromEdge = this.findNearestSafePoint(buildY, doorX, doorZ, building);
@@ -255,7 +264,6 @@ class StreetBuilder {
     
     let fromEdge = await this.buildStreetToBuildingEdge(buildY, fromStartX, fromStartZ, fromBuilding);
     
-    // ✅ FALLBACK: Wenn kein Rand, verwende nächsten sicheren Punkt
     if (!fromEdge) {
       console.log('⚠️ Fallback: Verwende nächsten sicheren Punkt');
       fromEdge = this.findNearestSafePoint(buildY, doorX, doorZ, fromBuilding);
@@ -367,43 +375,42 @@ class StreetBuilder {
       const progress = step / totalSteps;
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
-      for (let ox = -2; ox <= 2; ox++) {
-        for (let oz = -1; oz <= 1; oz++) {
-          for (let clearY = buildY + 1; clearY <= buildY + 5; clearY++) {
-            this.bot.chat(`/setblock ${currentX + ox} ${clearY} ${currentZ + oz} air`);
-            await new Promise(r => setTimeout(r, 10));
-          }
+      // ✅ SCHMALERE FREIFLÄCHE: 3x1 statt 5x3
+      for (let ox = -1; ox <= 1; ox++) {
+        for (let clearY = buildY + 1; clearY <= buildY + 5; clearY++) {
+          this.bot.chat(`/setblock ${currentX + ox} ${clearY} ${currentZ} air`);
+          await new Promise(r => setTimeout(r, 10));
         }
       }
     }
   }
 
   async buildPath(buildY, x1, z1, x2, z2) {
-    console.log(`🧱 Baue Straße ${x1},${z1} -> ${x2},${z2}`);
+    console.log(`🧱 Baue Straße ${x1},${z1} -> ${x2},${z2} (3x1)`);
     const dx = x2 - x1, dz = z2 - z1;
     const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
     for (let step = 0; step <= totalSteps; step++) {
       const progress = step / totalSteps;
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
-      for (let ox = -2; ox <= 2; ox++) {
-        for (let oz = -1; oz <= 1; oz++) {
-          this.bot.chat(`/setblock ${currentX + ox} ${buildY} ${currentZ + oz} stone_bricks`);
-          await new Promise(r => setTimeout(r, 20));
-        }
+      // ✅ SCHMALERE STRAßE: 3x1 statt 5x3
+      for (let ox = -1; ox <= 1; ox++) {
+        this.bot.chat(`/setblock ${currentX + ox} ${buildY} ${currentZ} stone_bricks`);
+        await new Promise(r => setTimeout(r, 20));
       }
     }
     console.log(`✅ Straße fertig`);
   }
 
   async buildStreetLanterns(buildY, x1, z1, x2, z2) {
-    console.log(`💡 Baue Straßenlaternen`);
+    console.log(`💡 Baue Straßenlaternen (1 Block Abstand)`);
     const dx = x2 - x1, dz = z2 - z1;
     const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
     const interval = 6;
     const isHorizontal = Math.abs(dx) >= Math.abs(dz);
-    const leftOff = isHorizontal ? [0, 3] : [-3, 0];
-    const rightOff = isHorizontal ? [0, -3] : [3, 0];
+    // ✅ LATERNEN 1 BLOCK ENTFERNT (statt 3)
+    const leftOff = isHorizontal ? [0, 2] : [-2, 0];
+    const rightOff = isHorizontal ? [0, -2] : [2, 0];
     for (let step = 0; step <= totalSteps; step += interval) {
       const progress = step / totalSteps;
       const currentX = Math.round(x1 + dx * progress);

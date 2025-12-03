@@ -1,30 +1,30 @@
+// builder.js - KOMPLETT GEFIXT MIT FUNDAMENT CHECK
+
 const fs = require('fs');
 const path = require('path');
 
 class Builder {
   constructor(bot) {
     this.bot = bot;
-    this.streetsFile = path.join(process.cwd(), 'data', 'streets.json');
-    this.streets = this.loadStreets();
   }
 
   loadStreets() {
     try {
-      if (fs.existsSync(this.streetsFile)) {
-        const content = fs.readFileSync(this.streetsFile, 'utf8');
+      const streetsFile = path.join(process.cwd(), 'data', 'streets.json');
+      if (fs.existsSync(streetsFile)) {
+        const content = fs.readFileSync(streetsFile, 'utf8');
         if (content.trim()) {
           return JSON.parse(content);
         }
       }
     } catch (e) {
-      console.log('Builder Load streets Fehler:', e.message);
+      console.log('[Builder] Load streets Fehler:', e.message);
     }
     return [];
   }
 
-  // Prüft ob Position in bestehender Straße liegt (5x3 Breite)
-  isPositionInStreet(x, z) {
-    for (const street of this.streets) {
+  isPositionOnStreet(x, z, streets) {
+    for (const street of streets) {
       const dx = street.to.x - street.from.x;
       const dz = street.to.z - street.from.z;
       const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
@@ -34,12 +34,10 @@ class Builder {
         const streetX = Math.round(street.from.x + dx * progress);
         const streetZ = Math.round(street.from.z + dz * progress);
         
-        // Prüfe 5x3 Straßenbereich um jeden Straßenpunkt
-        for (let ox = -2; ox <= 2; ox++) {
-          for (let oz = -1; oz <= 1; oz++) {
-            if (x === streetX + ox && z === streetZ + oz) {
-              return true;
-            }
+        // ✅ 3x1 Breite Prüfung
+        for (let ox = -1; ox <= 1; ox++) {
+          if (x === streetX + ox && z === streetZ) {
+            return true;
           }
         }
       }
@@ -49,133 +47,172 @@ class Builder {
 
   async buildBuilding(building, templateData) {
     const { x, y, z, width, depth, height } = building;
-    console.log(`Builder ${templateData.name} bei ${x},${y},${z} ${width}x${height}x${depth}`);
+    console.log(`[Builder] 🏗️ Baue ${templateData.name} bei ${x},${y},${z} (${width}x${height}x${depth})`);
     
     try {
-      // Phase 1: Fundament - OPTIMIZED mit fill, aber Street-Check
-      const foundationBlock = templateData.foundation || 'stone_bricks';
-      console.log(`Builder Fundament ${foundationBlock}`);
+      // ✅ NEUE CHECK: Fundament auf Straßen prüfen
+      const streets = this.loadStreets();
+      console.log(`[Builder] 🔍 Prüfe Fundament auf bestehende Straßen...`);
       
-      // Prüfe jedes Fundament-Block auf Straßenkollision
+      let hasConflict = false;
+      let conflictPos = null;
+      
       for (let fx = x; fx < x + width; fx++) {
         for (let fz = z; fz < z + depth; fz++) {
-          if (!this.isPositionInStreet(fx, fz)) {
-            this.bot.chat(`/setblock ${fx} ${y} ${fz} ${foundationBlock}`);
-            await new Promise(r => setTimeout(r, 10));
-          } else {
-            console.log(`Builder Fundament ${fx},${fz} übersprungen - Straße!`);
+          if (this.isPositionOnStreet(fx, fz, streets)) {
+            console.log(`[Builder] ❌ KONFLIKT: Fundament ${fx},${fz} überschneidet Straße!`);
+            hasConflict = true;
+            conflictPos = { x: fx, z: fz };
+            break;
           }
         }
+        if (hasConflict) break;
       }
-      await new Promise(r => setTimeout(r, 200));
+      
+      if (hasConflict) {
+        const msg = `Fundament überschneidet bestehende Straße bei ${conflictPos.x},${conflictPos.z}`;
+        console.log(`[Builder] ❌ ${msg}`);
+        this.bot.chat(`❌ ${msg}`);
+        await new Promise(r => setTimeout(r, 1000));
+        throw new Error(msg);
+      }
+      
+      console.log(`[Builder] ✅ Fundament-Bereich frei von Straßen`);
 
-      // Connection Check
-      if (!this.bot.player || !this.bot.player.entity) {
-        throw new Error('Connection lost during foundation');
-      }
-
-      // Phase 2: Wände - OPTIMIZED mit fill pro Wandseite, aber Street-Check
-      const wallBlock = templateData.walls || 'spruce_planks';
-      console.log(`Builder Wände ${wallBlock}`);
+      // ✅ FUNDAMENT: Basisfläche
+      const foundationBlock = templateData.foundation || 'stone_bricks';
+      console.log(`[Builder] 🧱 Fundament ${foundationBlock}`);
       
-      // Vordere Wand (Z = z)
-      for (let wx = x; wx < x + width; wx++) {
-        for (let wy = y + 1; wy < y + height - 1; wy++) {
-          if (!this.isPositionInStreet(wx, z)) {
-            this.bot.chat(`/setblock ${wx} ${wy} ${z} ${wallBlock}`);
-            await new Promise(r => setTimeout(r, 5));
-          }
-        }
-      }
-      
-      // Hintere Wand (Z = z + depth - 1)
-      for (let wx = x; wx < x + width; wx++) {
-        for (let wy = y + 1; wy < y + height - 1; wy++) {
-          if (!this.isPositionInStreet(wx, z + depth - 1)) {
-            this.bot.chat(`/setblock ${wx} ${wy} ${z + depth - 1} ${wallBlock}`);
-            await new Promise(r => setTimeout(r, 5));
-          }
-        }
-      }
-      
-      // Linke Wand (X = x)
-      for (let wz = z + 1; wz < z + depth - 1; wz++) {
-        for (let wy = y + 1; wy < y + height - 1; wy++) {
-          if (!this.isPositionInStreet(x, wz)) {
-            this.bot.chat(`/setblock ${x} ${wy} ${wz} ${wallBlock}`);
-            await new Promise(r => setTimeout(r, 5));
-          }
-        }
-      }
-      
-      // Rechte Wand (X = x + width - 1)
-      for (let wz = z + 1; wz < z + depth - 1; wz++) {
-        for (let wy = y + 1; wy < y + height - 1; wy++) {
-          if (!this.isPositionInStreet(x + width - 1, wz)) {
-            this.bot.chat(`/setblock ${x + width - 1} ${wy} ${wz} ${wallBlock}`);
-            await new Promise(r => setTimeout(r, 5));
-          }
+      for (let fx = x; fx < x + width; fx++) {
+        for (let fz = z; fz < z + depth; fz++) {
+          this.bot.chat(`/setblock ${fx} ${y} ${fz} ${foundationBlock}`);
+          await new Promise(r => setTimeout(r, 10));
         }
       }
 
-      // Connection Check nach Wänden
-      if (!this.bot.player || !this.bot.player.entity) {
-        throw new Error('Connection lost during walls');
+      // ✅ WÄNDE: Höhe und Seiten
+      const wallBlock = templateData.wall || 'oak_planks';
+      console.log(`[Builder] 🧱 Wände ${wallBlock}`);
+      
+      for (let wy = y + 1; wy < y + height; wy++) {
+        // Vorderseite
+        for (let wx = x; wx < x + width; wx++) {
+          this.bot.chat(`/setblock ${wx} ${wy} ${z} ${wallBlock}`);
+          await new Promise(r => setTimeout(r, 10));
+        }
+        // Rückseite
+        for (let wx = x; wx < x + width; wx++) {
+          this.bot.chat(`/setblock ${wx} ${wy} ${z + depth - 1} ${wallBlock}`);
+          await new Promise(r => setTimeout(r, 10));
+        }
+        // Linke Seite
+        for (let wz = z + 1; wz < z + depth - 1; wz++) {
+          this.bot.chat(`/setblock ${x} ${wy} ${wz} ${wallBlock}`);
+          await new Promise(r => setTimeout(r, 10));
+        }
+        // Rechte Seite
+        for (let wz = z + 1; wz < z + depth - 1; wz++) {
+          this.bot.chat(`/setblock ${x + width - 1} ${wy} ${wz} ${wallBlock}`);
+          await new Promise(r => setTimeout(r, 10));
+        }
       }
 
-      // Phase 3: Dach - OPTIMIZED mit fill
+      // ✅ DACH: Oberste Ebene
       const roofBlock = templateData.roof || 'spruce_stairs';
-      console.log(`Builder Dach ${roofBlock}`);
-      this.bot.chat(`/fill ${x} ${y + height - 1} ${z} ${x + width - 1} ${y + height - 1} ${z + depth - 1} ${roofBlock}`);
-      await new Promise(r => setTimeout(r, 300));
-
-      // Phase 4: Details/Türen/Deko - Einzelne setblock für Präzision
-      if (templateData.details) {
-        console.log('Builder Details platzieren');
-        for (const detail of templateData.details) {
-          const dx = x + detail.x;
-          const dz = z + detail.z;
-          if (!this.isPositionInStreet(dx, dz)) {
-            this.bot.chat(`/setblock ${dx} ${y + detail.y} ${dz} ${detail.block}`);
-            await new Promise(r => setTimeout(r, 100));
-          } else {
-            console.log(`Builder Detail ${dx},${dz} übersprungen - Straße!`);
-          }
+      console.log(`[Builder] 🏠 Dach ${roofBlock}`);
+      
+      for (let rx = x; rx < x + width; rx++) {
+        for (let rz = z; rz < z + depth; rz++) {
+          this.bot.chat(`/setblock ${rx} ${y + height} ${rz} ${roofBlock}`);
+          await new Promise(r => setTimeout(r, 10));
         }
       }
 
-      // Phase 5: Tür falls doorPos definiert
-      if (templateData.doorPos) {
-        const doorX = x + templateData.doorPos.x;
-        const doorY = y + (templateData.doorPos.y || 1);
-        const doorZ = z + templateData.doorPos.z;
-        console.log(`Builder Tür bei ${doorX},${doorY},${doorZ}`);
-        // Tür immer platzieren (auch auf Straße, da sie offen ist)
-        this.bot.chat(`/setblock ${doorX} ${doorY} ${doorZ} spruce_door`);
-        await new Promise(r => setTimeout(r, 100));
+      // ✅ DETAILS: Fenster, Dekoration
+      console.log(`[Builder] 🪟 Details platzieren`);
+      if (templateData.details && Array.isArray(templateData.details)) {
+        for (const detail of templateData.details) {
+          const detailX = x + detail.x;
+          const detailY = y + detail.y;
+          const detailZ = z + detail.z;
+          this.bot.chat(`/setblock ${detailX} ${detailY} ${detailZ} ${detail.block}`);
+          await new Promise(r => setTimeout(r, 15));
+        }
       }
 
-      console.log(`Builder GEBÄUDE KOMPLETT! ${width}x${height}x${depth}`);
-      return { status: 'success', blocksPlaced: width * height * depth };
+      // ✅ TÜR: Haupteingang
+      console.log(`[Builder] 🚪 Tür bei ${x + (building.doorPos?.x || 8)},${y},${z + (building.doorPos?.z || 0)}`);
+      const doorX = x + (building.doorPos?.x || Math.floor(width / 2));
+      const doorZ = z + (building.doorPos?.z || 0);
+      const doorBlock = templateData.door || 'oak_door';
+      
+      this.bot.chat(`/setblock ${doorX} ${y + 1} ${doorZ} ${doorBlock}`);
+      await new Promise(r => setTimeout(r, 100));
+      this.bot.chat(`/setblock ${doorX} ${y + 2} ${doorZ} ${doorBlock}[upper=true]`);
+      await new Promise(r => setTimeout(r, 100));
+
+      // ✅ BELEUCHTUNG: Innenlaternen (Optional)
+      if (templateData.lights && Array.isArray(templateData.lights)) {
+        console.log(`[Builder] 💡 Beleuchtung`);
+        for (const light of templateData.lights) {
+          const lightX = x + light.x;
+          const lightY = y + light.y;
+          const lightZ = z + light.z;
+          this.bot.chat(`/setblock ${lightX} ${lightY} ${lightZ} lantern`);
+          await new Promise(r => setTimeout(r, 15));
+        }
+      }
+
+      console.log(`[Builder] ✅ GEBÄUDE KOMPLETT! ${width}x${height}x${depth}`);
+      return { status: 'success', blocksPlaced: (width * height * depth) + (width * depth) };
 
     } catch (error) {
-      console.error('Builder Build failed:', error.message);
-      // Graceful disconnect und Reconnect-Vorbereitung
-      if (this.bot.player && this.bot.player.entity) {
-        this.bot.chat('say Build failed - reconnecting...');
-        await new Promise(r => setTimeout(r, 1000));
-      }
-      throw error; // Weiterwerfen für höhere Ebenen
+      console.error('[Builder] ❌ Build failed:', error.message);
+      this.bot.chat(`❌ Build Fehler - ${error.message}`);
+      await new Promise(r => setTimeout(r, 1000));
+      return { status: 'error', message: error.message };
     }
   }
 
-  // Helper: Connection prüfen und reconnect wenn nötig
-  async reconnectIfNeeded() {
-    if (!this.bot.player || !this.bot.player.entity) {
-      console.log('Builder Reconnecting...');
-      // Hier könnte bot.quit() + reconnect logic implementiert werden
-      throw new Error('Bot disconnected - manual reconnect required');
+  async clearArea(building, radius = 2) {
+    const { x, y, z, width, depth, height } = building;
+    const minX = x - radius;
+    const maxX = x + width + radius;
+    const minZ = z - radius;
+    const maxZ = z + depth + radius;
+
+    console.log(`[Builder] 🧹 Räume Bereich um ${building.name} auf`);
+
+    for (let cx = minX; cx <= maxX; cx++) {
+      for (let cz = minZ; cz <= maxZ; cz++) {
+        // Entferne alles über Bodenlevel bis y+6
+        for (let cy = y; cy <= y + 6; cy++) {
+          this.bot.chat(`/setblock ${cx} ${cy} ${cz} air`);
+          await new Promise(r => setTimeout(r, 5));
+        }
+      }
     }
+
+    console.log(`[Builder] ✅ Bereich geleert`);
+  }
+
+  async flattenArea(building, radius = 2) {
+    const { x, y, z, width, depth } = building;
+    const minX = x - radius;
+    const maxX = x + width + radius;
+    const minZ = z - radius;
+    const maxZ = z + depth + radius;
+
+    console.log(`[Builder] 🪨 Ebne Grundfläche`);
+
+    for (let fx = minX; fx <= maxX; fx++) {
+      for (let fz = minZ; fz <= maxZ; fz++) {
+        this.bot.chat(`/setblock ${fx} ${y - 1} ${fz} grass_block`);
+        await new Promise(r => setTimeout(r, 5));
+      }
+    }
+
+    console.log(`[Builder] ✅ Fläche geebnet`);
   }
 }
 
