@@ -18,16 +18,16 @@ class TerrainPreparer {
     console.log(`[TerrainPreparer] 🧱 FUNDAMENT ${fundWidth}x${fundDepth} (+${extraSizeX}/${extraSizeZ}) bei (${fundX},${fundZ})`);
 
     // ✅ SCHRITT 1: Fundament bauen
-    await this._buildSmallFoundation(fundX, fundZ, fundWidth, fundDepth, y);
+    await this._buildSmallFoundation(fundX, fundZ, fundWidth, fundDepth, y + 1);
     
     // ✅ SCHRITT 2: Sky-Bereich über gesamter FUNDAMENT-Fläche freiräumen
-    await this._clearSkyAreaAboveFoundation(fundX, fundZ, fundWidth, fundDepth, y);
+    await this._clearSkyAreaAboveFoundation(fundX, fundZ, fundWidth, fundDepth, y + 1);
     
     console.log('[TerrainPreparer] ✅ Vorbereitung komplett');
   }
 
   async _buildSmallFoundation(x, z, width, depth, buildingY) {
-    console.log(`[TerrainPreparer] 🧱 FUNDAMENT y=61 bis ${buildingY - 1}`);
+    console.log(`[TerrainPreparer] 🧱 FUNDAMENT y=61 bis ${buildingY + 1}`);
     
     let blockCount = 0;
     for (let bx = x; bx < x + width; bx++) {
