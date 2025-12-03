@@ -54,12 +54,15 @@ class StreetBuilder {
     }
   }
 
-  // Prüft ob Position in Gebäude liegt
-  isPositionInBuilding(x, z) {
+  // Prüft ob Position im Gebäude-Innenraum liegt (NICHT Fundament-Rand)
+  isPositionInBuildingInterior(x, z) {
     for (const village of this.villages) {
       for (const building of village.buildings) {
-        if (x >= building.x && x < building.x + (building.width || 16) &&
-            z >= building.z && z < building.z + (building.depth || 16)) {
+        const width = building.width || 16;
+        const depth = building.depth || 16;
+        // Nur INNENRAUM (1 Block Einsatz vom Rand)
+        if (x > building.x && x < building.x + width - 1 &&
+            z > building.z && z < building.z + depth - 1) {
           return true;
         }
       }
@@ -67,21 +70,41 @@ class StreetBuilder {
     return false;
   }
 
-  // Prüft ob Position auf einem Fundament liegt (außer Gebäude-Innenraum)
-  isPositionOnFoundation(building, x, z) {
-    const foundationX1 = building.x;
-    const foundationZ1 = building.z;
-    const foundationX2 = building.x + (building.width || 16);
-    const foundationZ2 = building.z + (building.depth || 16);
+  // Berechnet HORIZONTALE/VERTIKALE Richtung zur Tür
+  getDoorDirection(doorX, doorZ, building) {
+    const centerX = building.x + (building.width || 16) / 2;
+    const centerZ = building.z + (building.depth || 16) / 2;
     
-    // Auf Fundament, ABER nicht im Gebäude-Innenraum (Randbereich)
-    return (x >= foundationX1 && x < foundationX2 && 
-            z >= foundationZ1 && z < foundationZ2 &&
-            !(x > foundationX1 && x < foundationX2 - 1 && 
-              z > foundationZ1 && z < foundationZ2 - 1));
+    const dx = Math.abs(doorX - centerX);
+    const dz = Math.abs(doorZ - centerZ);
+    
+    if (dx > dz) return 'horizontal'; // X-Richtung (links/rechts zur Tür)
+    return 'vertical'; // Z-Richtung (vorne/hinten zur Tür)
   }
 
-  // Prüft ob kompletter Pfad frei von Gebäuden ist (AUßER Fundamente)
+  // KÜRZESTER Weg: 1 Block vor Tür -> Fundament-Ende (horizontal/vertikal)
+  calculateFoundationPath(fromX, fromZ, building) {
+    const doorDir = this.getDoorDirection(fromX, fromZ, building);
+    const width = building.width || 16;
+    const depth = building.depth || 16;
+    
+    let foundationEndX, foundationEndZ;
+    
+    if (doorDir === 'horizontal') {
+      // Horizontal zur Tür: gleiches Z, zum Gegenseite-Fundament-Ende
+      foundationEndX = fromX < building.x + width / 2 ? building.x + width - 1 : building.x;
+      foundationEndZ = fromZ; // Gleiches Z-Level
+    } else {
+      // Vertikal zur Tür: gleiches X, zum Gegenseite-Fundament-Ende
+      foundationEndX = fromX;
+      foundationEndZ = fromZ < building.z + depth / 2 ? building.z + depth - 1 : building.z;
+    }
+    
+    console.log(`StreetBuilder Tür-Richtung: ${doorDir}, Fundament-Ende: ${foundationEndX},${foundationEndZ}`);
+    return { x: foundationEndX, z: foundationEndZ };
+  }
+
+  // Prüft ob kompletter Pfad frei von Gebäuden ist (Außenbereich)
   isPathFree(buildY, x1, z1, x2, z2) {
     const dx = x2 - x1, dz = z2 - z1;
     const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
@@ -91,31 +114,10 @@ class StreetBuilder {
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
       
-      // Prüfe 5x3 Straße-Bereich - ERlaubte Ausnahme: Fundament-Ränder
       for (let ox = -2; ox <= 2; ox++) {
         for (let oz = -1; oz <= 1; oz++) {
-          const testX = currentX + ox;
-          const testZ = currentZ + oz;
-          
-          // Erlaube Fundament-Ränder, aber blockiere Gebäude-Innenräume
-          let blocked = this.isPositionInBuilding(testX, testZ);
-          if (blocked) {
-            // Prüfe ob es ein erlaubtes Fundament ist
-            let foundationFound = false;
-            for (const village of this.villages) {
-              for (const building of village.buildings) {
-                if (this.isPositionOnFoundation(building, testX, testZ)) {
-                  foundationFound = true;
-                  break;
-                }
-              }
-              if (foundationFound) break;
-            }
-            if (foundationFound) continue; // Fundament OK
-          }
-          
-          if (blocked) {
-            console.log(`StreetBuilder Gebäude bei ${testX}, ${testZ}`);
+          if (this.isPositionInBuildingInterior(currentX + ox, currentZ + oz)) {
+            console.log(`StreetBuilder Gebäude-Innenraum bei ${currentX + ox}, ${currentZ + oz}`);
             return false;
           }
         }
@@ -124,21 +126,8 @@ class StreetBuilder {
     return true;
   }
 
-  findNearestStreet(x, z, maxDistance = 10) {
-    for (const street of this.streets) {
-      const distFrom = Math.max(Math.abs(street.from.x - x), Math.abs(street.from.z - z));
-      const distTo = Math.max(Math.abs(street.to.x - x), Math.abs(street.to.z - z));
-      if (distFrom <= maxDistance || distTo <= maxDistance) {
-        console.log(`StreetBuilder Gefunden Straße zu ${street.from.x},${street.from.z} dist:${distFrom}`);
-        return street.from;
-      }
-    }
-    return null;
-  }
-
-  // Intelligenter Umweg-Finder (nur für Außenbereich)
   findValidPath(buildY, x1, z1, x2, z2, maxAttempts = 12) {
-    console.log('StreetBuilder Suche freien Pfad...');
+    console.log('StreetBuilder Suche freien Pfad (Außenbereich)...');
     const offsets = [];
     for (let dist = 1; dist <= maxAttempts; dist++) {
       offsets.push([dist, 0], [-dist, 0], [0, dist], [0, -dist]);
@@ -160,34 +149,33 @@ class StreetBuilder {
     return null;
   }
 
-  // ✅ GEFIXT: Fundament-Verbindung + 1 Block vor Tür
+  // ✅ GEFIXT: Horizontal/Vertikal + Fundament-Ende
   async buildStreetToBuilding(buildY, fromBuilding, toBuilding) {
-    // Start: Türposition fromBuilding
-    let fromX = fromBuilding.x + (fromBuilding.doorPos?.x || 8);
-    let fromZ = fromBuilding.z + (fromBuilding.doorPos?.z || 0);
+    // START: 1 Block vor fromBuilding-Tür
+    const doorX = fromBuilding.x + (fromBuilding.doorPos?.x || 8);
+    const doorZ = fromBuilding.z + (fromBuilding.doorPos?.z || 0);
+    const fromStartX = doorX;
+    const fromStartZ = doorZ - 1; // 1 Block vor Tür
 
-    // Ziel: 1 Block vor toBuilding-Tür (gleiches X, Z-1)
-    const doorX = toBuilding.x + (toBuilding.doorPos?.x || 8);
-    const doorZ = toBuilding.z + (toBuilding.doorPos?.z || 0);
-    let finalToX = doorX;
-    let finalToZ = doorZ - 1; // 1 Block vor Tür
-
-    console.log(`StreetBuilder Von ${fromBuilding.name} Tür(${fromX},${fromZ}) nach ${toBuilding.name} 1vorTür(${finalToX},${finalToZ})`);
-
-    // Phase 1: DIREKT AUF fromBuilding Fundament (gerade, keine Prüfung)
-    const fromFoundationDepth = fromBuilding.depth || 16;
-    const fromFoundationFrontZ = fromBuilding.z + fromFoundationDepth; // Fundament-Ende
-    
-    let path1 = {
-      x1: fromX, z1: fromZ,
-      x2: fromX, z2: fromFoundationFrontZ  // Gerade vom Türpunkt zum Fundament-Ende
+    // Phase 1: HORIZONTAL/VERTIKAL zum Fundament-Ende (GERADE!)
+    const foundationEnd = this.calculateFoundationPath(fromStartX, fromStartZ, fromBuilding);
+    const path1 = {
+      x1: fromStartX, z1: fromStartZ,
+      x2: foundationEnd.x, z2: foundationEnd.z
     };
     
-    console.log(`Phase1: Fundament-Verbindung ${path1.x1},${path1.z1} -> ${path1.x2},${path1.z2}`);
+    console.log(`Phase1: Fundament-Straße ${path1.x1},${path1.z1} -> ${path1.x2},${path1.z2} (horizontal/vertikal)`);
+    
+    // Phase 1: DIREKT bauen (keine Prüfung, eigenes Fundament)
     await this.clearAbove(buildY, path1.x1, path1.z1, path1.x2, path1.z2);
     await this.buildPath(buildY, path1.x1, path1.z1, path1.x2, path1.z2);
 
-    // Phase 2: Von fromBuilding-Fundament-Ende nach toBuilding 1vorTür (mit Umwegen)
+    // Phase 2: Von fromBuilding-Fundament-Ende zu toBuilding 1vorTür (DIAGONAL OK)
+    const toDoorX = toBuilding.x + (toBuilding.doorPos?.x || 8);
+    const toDoorZ = toBuilding.z + (toBuilding.doorPos?.z || 0);
+    const finalToX = toDoorX;
+    const finalToZ = toDoorZ - 1; // 1 Block vor toBuilding-Tür
+    
     let path2 = { x1: path1.x2, z1: path1.z2, x2: finalToX, z2: finalToZ };
     
     if (!this.isPathFree(buildY, path2.x1, path2.z1, path2.x2, path2.z2)) {
@@ -199,13 +187,13 @@ class StreetBuilder {
       return;
     }
 
-    console.log(`Phase2: Außenbereich ${path2.x1},${path2.z1} -> ${path2.x2},${path2.z2}`);
+    console.log(`Phase2: Vernetzung ${path2.x1},${path2.z1} -> ${path2.x2},${path2.z2} (diagonal OK)`);
     await this.clearAbove(buildY, path2.x1, path2.z1, path2.x2, path2.z2);
     await this.buildPath(buildY, path2.x1, path2.z1, path2.x2, path2.z2);
     await this.buildStreetLanterns(buildY, path2.x1, path2.z1, path2.x2, path2.z2);
 
     this.streets.push({
-      from: { name: `${fromBuilding.name}-fundament`, x: path1.x1, z: path1.z1 },
+      from: { name: `${fromBuilding.name}-fundamentEnde`, x: path1.x2, z: path1.z2 },
       to: { name: `${toBuilding.name}-1vorTür`, x: path2.x2, z: path2.z2 },
       buildY,
       timestamp: new Date().toISOString()
@@ -213,7 +201,7 @@ class StreetBuilder {
     this.saveStreets();
   }
 
-  // FLEXIBLER Build-Befehl bleibt unverändert
+  // buildStreet bleibt unverändert (Koordinaten/Flexibel)
   async buildStreet(buildY, target) {
     let fromBuilding, toBuilding, targetX, targetZ;
     
@@ -228,10 +216,10 @@ class StreetBuilder {
 
     let fromX, fromZ;
     if (fromBuilding) {
-      fromX = fromBuilding.x + (fromBuilding.doorPos?.x || 8);
-      fromZ = fromBuilding.z + (fromBuilding.doorPos?.z || 0);
+      fromX = fromBuilding.x;
+      fromZ = fromBuilding.z;
     } else {
-      fromX = this.villages[0]?.buildings?.[0]?.x + 8 || 0;
+      fromX = this.villages[0]?.buildings?.[0]?.x || 0;
       fromZ = this.villages[0]?.buildings?.[0]?.z || 0;
     }
 
@@ -241,10 +229,8 @@ class StreetBuilder {
       finalZ2 = targetZ;
     } else {
       finalX2 = toBuilding.x + (toBuilding.doorPos?.x || 8);
-      finalZ2 = toBuilding.z + (toBuilding.doorPos?.z || 0) - 1; // 1 Block vor Tür
+      finalZ2 = toBuilding.z + (toBuilding.doorPos?.z || 0) - 1;
     }
-
-    console.log(`StreetBuilder Straße y${buildY} von ${fromX},${fromZ} nach ${finalX2},${finalZ2}`);
 
     let path = { x1: fromX, z1: fromZ, x2: finalX2, z2: finalZ2 };
     if (!this.isPathFree(buildY, fromX, fromZ, finalX2, finalZ2)) {
@@ -252,7 +238,7 @@ class StreetBuilder {
     }
     
     if (!path) {
-      console.log('StreetBuilder KEIN freier Pfad gefunden - überspringe!');
+      console.log('StreetBuilder KEIN freier Pfad gefunden!');
       return;
     }
 
@@ -269,6 +255,7 @@ class StreetBuilder {
     this.saveStreets();
   }
 
+  // ... (buildLanternPosts, clearAbove, buildPath, buildStreetLanterns, placeLantern bleiben unverändert)
   async buildLanternPosts(buildY, building) {
     console.log(`StreetBuilder ${building.name} Gebäude-Laternen y${buildY}`);
     const width = building.width || 16;
@@ -336,7 +323,7 @@ class StreetBuilder {
   }
 
   async buildStreetLanterns(buildY, x1, z1, x2, z2) {
-    console.log('StreetBuilder Straßenlaternen links/rechts, 1 Block Abstand');
+    console.log('StreetBuilder Straßenlaternen links/rechts');
     const dx = x2 - x1, dz = z2 - z1;
     const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
     const interval = 6;
