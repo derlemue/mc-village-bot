@@ -1,30 +1,31 @@
-// villageManager.js - KOMPLETT GEFIXT: NUTZT BUILDER FÜR POSITION-CHECK
-
 const fs = require('fs');
 const path = require('path');
 
 class VillageManager {
   constructor(builder = null) {
-    this.villagesFile = path.join(process.cwd(), 'data', 'villages.json');
-    this.villages = this._loadVillages();
     this.builder = builder;
-    this._ensureDataDir();
+    this.villagesFile = path.join(process.cwd(), 'data', 'villages.json');
+    this.villages = this.loadVillages();
+    this.ensureDataDir();
   }
 
-  _ensureDataDir() {
+  ensureDataDir() {
     const dataDir = path.dirname(this.villagesFile);
-    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
   }
 
-  _loadVillages() {
+  loadVillages() {
     try {
       if (fs.existsSync(this.villagesFile)) {
         const content = fs.readFileSync(this.villagesFile, 'utf8');
-        if (content.trim() === '' || content === 'null') return [];
-        return JSON.parse(content);
+        if (content.trim()) {
+          return JSON.parse(content);
+        }
       }
     } catch (e) {
-      console.log('[VillageManager] ⚠️ Load Fehler:', e.message);
+      console.log('[VillageManager] Load Fehler:', e.message);
     }
     return [];
   }
@@ -32,14 +33,14 @@ class VillageManager {
   saveVillages() {
     try {
       fs.writeFileSync(this.villagesFile, JSON.stringify(this.villages, null, 2), 'utf8');
-      console.log('[VillageManager] 💾 Dörfer gespeichert');
+      console.log('[VillageManager] Dörfer gespeichert');
     } catch (e) {
-      console.log('[VillageManager] ❌ Save Fehler:', e.message);
+      console.log('[VillageManager] Save Fehler:', e.message);
     }
   }
 
   findOrCreateVillage(centerX, centerY, centerZ) {
-    console.log(`[VillageManager] 🏘️ Prüfe Dorf bei (${centerX}, ${centerY}, ${centerZ})`);
+    console.log(`[VillageManager] 🔍 Prüfe Dorf bei ${centerX},${centerY},${centerZ}`);
     let village = this.villages.find(v =>
       Math.abs(v.centerX - centerX) < v.size &&
       Math.abs(v.centerZ - centerZ) < v.size
@@ -47,40 +48,42 @@ class VillageManager {
 
     if (!village) {
       village = {
-        id: 'village_' + Date.now(),
-        centerX, centerY, centerZ,
+        id: `village_${Date.now()}`,
+        centerX,
+        centerY,
+        centerZ,
         size: 100,
         buildings: [],
         maxBuildings: 250
       };
       this.villages.push(village);
-      console.log(`[VillageManager] ✨ Neues Dorf: ${village.id}`);
-      console.log(`[VillageManager] 📐 Fläche: ${village.size} x ${village.size}`);
+      console.log(`[VillageManager] ✨ Neues Dorf ${village.id}`);
+      console.log(`[VillageManager] Fläche: ${village.size}x${village.size}`);
       this.saveVillages();
     } else {
-      console.log(`[VillageManager] ✅ Dorf existiert: ${village.id}`);
+      console.log(`[VillageManager] 🏘️ Dorf existiert: ${village.id}`);
     }
+
     return village;
   }
 
   // ✅ NEU: Nutzt Builder um valide Position zu finden (keine Straßen-Konflikte)
   findFreePosition(village, templateWidth, templateDepth, attempts = 50) {
     // Wenn Builder verfügbar, nutze dessen Prüfung
-    if (this.builder && this.builder.findValidBuildingPosition) {
-      console.log('[VillageManager] 🔍 Nutze Builder-Prüfung für Position...');
+    if (this.builder?.findValidBuildingPosition) {
+      console.log('[VillageManager] 🔧 Nutze Builder-Prüfung für Position...');
       const streets = this.builder.loadStreets();
-      const pos = this.builder.findValidBuildingPosition(village, {
-        width: templateWidth,
-        depth: templateDepth
-      }, streets, attempts);
-      
-      if (pos) {
-        return pos;
-      }
+      const pos = this.builder.findValidBuildingPosition(
+        village,
+        { width: templateWidth, depth: templateDepth },
+        streets,
+        attempts
+      );
+      if (pos) return pos;
     }
 
     // Fallback: Alte Methode ohne Straßen-Check
-    console.log('[VillageManager] ⚠️ Fallback: Suche Position ohne Straßen-Prüfung');
+    console.log('[VillageManager] ⚠️ Fallback Suche Position ohne Straßen-Prüfung');
     for (let attempt = 1; attempt <= attempts; attempt++) {
       const offsetX = (Math.random() - 0.5) * village.size;
       const offsetZ = (Math.random() - 0.5) * village.size;
@@ -93,22 +96,23 @@ class VillageManager {
       );
 
       if (!collision) {
-        console.log(`[VillageManager] ✅ Position bei (${posX}, ${posZ}) nach ${attempt} Versuchen`);
+        console.log(`[VillageManager] ✅ Position bei ${posX},${posZ} nach ${attempt} Versuchen`);
         return { x: posX, z: posZ };
       }
 
-      if (attempt === attempts) {
+      if (attempt % 50 === 0) {
         village.size += 100;
-        console.log(`[VillageManager] 📈 Erweitere Dorf-Fläche: ${village.size - 100} → ${village.size}`);
+        console.log(`[VillageManager] 🔄 Erweitere Dorf-Fläche auf ${village.size}x${village.size}`);
         this.saveVillages();
-        return this.findFreePosition(village, templateWidth, templateDepth);
       }
     }
+
+    return null;
   }
 
   addBuildingToVillage(village, building) {
     village.buildings.push(building);
-    console.log(`[VillageManager] 🏘️ ${building.name} zu "${village.id}" hinzugefügt (${village.buildings.length}/${village.maxBuildings})`);
+    console.log(`[VillageManager] ✅ ${building.name} zu ${village.id} hinzugefügt (${village.buildings.length}/${village.maxBuildings})`);
     this.saveVillages();
   }
 
@@ -117,7 +121,7 @@ class VillageManager {
   }
 
   reloadVillages() {
-    this.villages = this._loadVillages();
+    this.villages = this.loadVillages();
     console.log('[VillageManager] 🔄 Villages reloaded');
   }
 }

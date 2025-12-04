@@ -48,10 +48,9 @@ class Builder {
   // ✅ NEU: Findet freie Position ohne Straßen-Konflikt
   findValidBuildingPosition(village, templateData, streets, maxAttempts = 100) {
     console.log(`[Builder] 🔍 Suche valide Position ohne Straßen-Konflikt...`);
-    
     const width = templateData.width || 16;
     const depth = templateData.depth || 16;
-    
+
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       const offsetX = (Math.random() - 0.5) * village.size;
       const offsetZ = (Math.random() - 0.5) * village.size;
@@ -63,7 +62,6 @@ class Builder {
         Math.abs(b.x - posX) < (b.width + width) / 2 + 10 &&
         Math.abs(b.z - posZ) < (b.depth + depth) / 2 + 10
       );
-
       if (buildingCollision) {
         continue;
       }
@@ -96,15 +94,14 @@ class Builder {
   async buildBuilding(building, templateData) {
     const { x, y, z, width, depth, height } = building;
     console.log(`[Builder] 🏗️ Baue ${templateData.name} bei ${x},${y},${z} (${width}x${height}x${depth})`);
-    
+
     try {
       // ✅ KRITISCH CHECK: Fundament DARF KEINE STRAßEN ÜBERBAUEN
       const streets = this.loadStreets();
       console.log(`[Builder] 🔍 Prüfe Fundament auf bestehende Straßen...`);
-      
       let hasConflict = false;
       let conflictPos = null;
-      
+
       // ✅ GESAMTES Fundament prüfen
       for (let fx = x; fx < x + width; fx++) {
         for (let fz = z; fz < z + depth; fz++) {
@@ -117,7 +114,7 @@ class Builder {
         }
         if (hasConflict) break;
       }
-      
+
       if (hasConflict) {
         const msg = `❌ POSITION UNGÜLTIG: Fundament überschneidet Straße bei ${conflictPos.x},${conflictPos.z}. Bitte andere Position wählen.`;
         console.log(`[Builder] ${msg}`);
@@ -125,13 +122,12 @@ class Builder {
         await new Promise(r => setTimeout(r, 1000));
         return { status: 'error', message: msg };
       }
-      
+
       console.log(`[Builder] ✅ Fundament-Bereich FREI von Straßen`);
 
       // ✅ FUNDAMENT: Basisfläche
       const foundationBlock = templateData.foundation || 'stone_bricks';
       console.log(`[Builder] 🧱 Fundament ${foundationBlock}`);
-      
       for (let fx = x; fx < x + width; fx++) {
         for (let fz = z; fz < z + depth; fz++) {
           this.bot.chat(`/setblock ${fx} ${y} ${fz} ${foundationBlock}`);
@@ -142,7 +138,6 @@ class Builder {
       // ✅ WÄNDE: Höhe und Seiten
       const wallBlock = templateData.wall || 'oak_planks';
       console.log(`[Builder] 🧱 Wände ${wallBlock}`);
-      
       for (let wy = y + 1; wy < y + height; wy++) {
         // Vorderseite
         for (let wx = x; wx < x + width; wx++) {
@@ -169,7 +164,6 @@ class Builder {
       // ✅ DACH: Oberste Ebene
       const roofBlock = templateData.roof || 'spruce_stairs';
       console.log(`[Builder] 🏠 Dach ${roofBlock}`);
-      
       for (let rx = x; rx < x + width; rx++) {
         for (let rz = z; rz < z + depth; rz++) {
           this.bot.chat(`/setblock ${rx} ${y + height} ${rz} ${roofBlock}`);
@@ -194,7 +188,6 @@ class Builder {
       const doorX = x + (building.doorPos?.x || Math.floor(width / 2));
       const doorZ = z + (building.doorPos?.z || 0);
       const doorBlock = templateData.door || 'oak_door';
-      
       this.bot.chat(`/setblock ${doorX} ${y + 1} ${doorZ} ${doorBlock}`);
       await new Promise(r => setTimeout(r, 100));
       this.bot.chat(`/setblock ${doorX} ${y + 2} ${doorZ} ${doorBlock}[upper=true]`);
@@ -229,9 +222,7 @@ class Builder {
     const maxX = x + width + radius;
     const minZ = z - radius;
     const maxZ = z + depth + radius;
-
-    console.log(`[Builder] 🧹 Räume Bereich um ${building.name} auf`);
-
+    console.log(`[Builder] 🧹 Räume Bereich um ${building.name} auf...`);
     for (let cx = minX; cx <= maxX; cx++) {
       for (let cz = minZ; cz <= maxZ; cz++) {
         for (let cy = y; cy <= y + 6; cy++) {
@@ -240,7 +231,6 @@ class Builder {
         }
       }
     }
-
     console.log(`[Builder] ✅ Bereich geleert`);
   }
 
@@ -250,16 +240,13 @@ class Builder {
     const maxX = x + width + radius;
     const minZ = z - radius;
     const maxZ = z + depth + radius;
-
     console.log(`[Builder] 🪨 Ebne Grundfläche`);
-
     for (let fx = minX; fx <= maxX; fx++) {
       for (let fz = minZ; fz <= maxZ; fz++) {
         this.bot.chat(`/setblock ${fx} ${y - 1} ${fz} grass_block`);
         await new Promise(r => setTimeout(r, 5));
       }
     }
-
     console.log(`[Builder] ✅ Fläche geebnet`);
   }
 }
