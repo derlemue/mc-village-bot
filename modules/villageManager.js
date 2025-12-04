@@ -1,18 +1,19 @@
+// villageManager.js - KOMPLETT GEFIXT: NUTZT BUILDER FÜR POSITION-CHECK
+
 const fs = require('fs');
-const path = require('path');  // ✅ FEHLTETE IMPORT!
+const path = require('path');
 
 class VillageManager {
-  constructor() {
+  constructor(builder = null) {
     this.villagesFile = path.join(process.cwd(), 'data', 'villages.json');
     this.villages = this._loadVillages();
+    this.builder = builder;
     this._ensureDataDir();
   }
 
   _ensureDataDir() {
     const dataDir = path.dirname(this.villagesFile);
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
   }
 
   _loadVillages() {
@@ -62,16 +63,33 @@ class VillageManager {
     return village;
   }
 
+  // ✅ NEU: Nutzt Builder um valide Position zu finden (keine Straßen-Konflikte)
   findFreePosition(village, templateWidth, templateDepth, attempts = 50) {
+    // Wenn Builder verfügbar, nutze dessen Prüfung
+    if (this.builder && this.builder.findValidBuildingPosition) {
+      console.log('[VillageManager] 🔍 Nutze Builder-Prüfung für Position...');
+      const streets = this.builder.loadStreets();
+      const pos = this.builder.findValidBuildingPosition(village, {
+        width: templateWidth,
+        depth: templateDepth
+      }, streets, attempts);
+      
+      if (pos) {
+        return pos;
+      }
+    }
+
+    // Fallback: Alte Methode ohne Straßen-Check
+    console.log('[VillageManager] ⚠️ Fallback: Suche Position ohne Straßen-Prüfung');
     for (let attempt = 1; attempt <= attempts; attempt++) {
       const offsetX = (Math.random() - 0.5) * village.size;
       const offsetZ = (Math.random() - 0.5) * village.size;
-      const posX = Math.floor(village.centerX + offsetX - templateWidth/2);
-      const posZ = Math.floor(village.centerZ + offsetZ - templateDepth/2);
+      const posX = Math.floor(village.centerX + offsetX - templateWidth / 2);
+      const posZ = Math.floor(village.centerZ + offsetZ - templateDepth / 2);
 
       const collision = village.buildings.some(b =>
-        Math.abs(b.x - posX) < (b.width + templateWidth)/2 + 10 &&
-        Math.abs(b.z - posZ) < (b.depth + templateDepth)/2 + 10
+        Math.abs(b.x - posX) < (b.width + templateWidth) / 2 + 10 &&
+        Math.abs(b.z - posZ) < (b.depth + templateDepth) / 2 + 10
       );
 
       if (!collision) {
@@ -79,7 +97,6 @@ class VillageManager {
         return { x: posX, z: posZ };
       }
 
-      // Dorf erweitern falls voll
       if (attempt === attempts) {
         village.size += 100;
         console.log(`[VillageManager] 📈 Erweitere Dorf-Fläche: ${village.size - 100} → ${village.size}`);
@@ -95,7 +112,6 @@ class VillageManager {
     this.saveVillages();
   }
 
-  // ✅ NEU: Für direkte Synchronisation mit StreetBuilder
   getVillages() {
     return this.villages;
   }

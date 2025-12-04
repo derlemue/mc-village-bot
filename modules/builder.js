@@ -1,4 +1,4 @@
-// builder.js - KOMPLETT GEFIXT MIT 5x1 FUNDAMENT CHECK
+// builder.js - KOMPLETT GEFIXT: FUNDAMENT DARF KEINE STRAßEN ÜBERBAUEN
 
 const fs = require('fs');
 const path = require('path');
@@ -34,7 +34,7 @@ class Builder {
         const streetX = Math.round(street.from.x + dx * progress);
         const streetZ = Math.round(street.from.z + dz * progress);
         
-        // ✅ 5x1 Breite Prüfung (ox = -2 bis 2)
+        // ✅ 5x1 Breite Prüfung
         for (let ox = -2; ox <= 2; ox++) {
           if (x === streetX + ox && z === streetZ) {
             return true;
@@ -45,22 +45,71 @@ class Builder {
     return false;
   }
 
+  // ✅ NEU: Findet freie Position ohne Straßen-Konflikt
+  findValidBuildingPosition(village, templateData, streets, maxAttempts = 100) {
+    console.log(`[Builder] 🔍 Suche valide Position ohne Straßen-Konflikt...`);
+    
+    const width = templateData.width || 16;
+    const depth = templateData.depth || 16;
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const offsetX = (Math.random() - 0.5) * village.size;
+      const offsetZ = (Math.random() - 0.5) * village.size;
+      const posX = Math.floor(village.centerX + offsetX - width / 2);
+      const posZ = Math.floor(village.centerZ + offsetZ - depth / 2);
+
+      // ✅ Prüfe Gebäude-Kollisionen
+      const buildingCollision = village.buildings.some(b =>
+        Math.abs(b.x - posX) < (b.width + width) / 2 + 10 &&
+        Math.abs(b.z - posZ) < (b.depth + depth) / 2 + 10
+      );
+
+      if (buildingCollision) {
+        continue;
+      }
+
+      // ✅ KRITISCH: Prüfe Straßen-Kollisionen für GESAMTES Fundament
+      let hasStreetConflict = false;
+      for (let fx = posX; fx < posX + width; fx++) {
+        for (let fz = posZ; fz < posZ + depth; fz++) {
+          if (this.isPositionOnStreet(fx, fz, streets)) {
+            console.log(`[Builder] ⚠️ Position ${posX},${posZ} hat Straße bei ${fx},${fz}`);
+            hasStreetConflict = true;
+            break;
+          }
+        }
+        if (hasStreetConflict) break;
+      }
+
+      if (hasStreetConflict) {
+        continue;
+      }
+
+      console.log(`[Builder] ✅ Valide Position gefunden: ${posX},${posZ} nach ${attempt + 1} Versuchen`);
+      return { x: posX, z: posZ };
+    }
+
+    console.log(`[Builder] ❌ Keine valide Position nach ${maxAttempts} Versuchen!`);
+    return null;
+  }
+
   async buildBuilding(building, templateData) {
     const { x, y, z, width, depth, height } = building;
     console.log(`[Builder] 🏗️ Baue ${templateData.name} bei ${x},${y},${z} (${width}x${height}x${depth})`);
     
     try {
-      // ✅ NEUE CHECK: Fundament auf Straßen prüfen
+      // ✅ KRITISCH CHECK: Fundament DARF KEINE STRAßEN ÜBERBAUEN
       const streets = this.loadStreets();
       console.log(`[Builder] 🔍 Prüfe Fundament auf bestehende Straßen...`);
       
       let hasConflict = false;
       let conflictPos = null;
       
+      // ✅ GESAMTES Fundament prüfen
       for (let fx = x; fx < x + width; fx++) {
         for (let fz = z; fz < z + depth; fz++) {
           if (this.isPositionOnStreet(fx, fz, streets)) {
-            console.log(`[Builder] ❌ KONFLIKT: Fundament ${fx},${fz} überschneidet Straße!`);
+            console.log(`[Builder] ❌ KONFLIKT: Fundament-Block ${fx},${fz} liegt auf Straße!`);
             hasConflict = true;
             conflictPos = { x: fx, z: fz };
             break;
@@ -70,14 +119,14 @@ class Builder {
       }
       
       if (hasConflict) {
-        const msg = `Fundament überschneidet bestehende Straße bei ${conflictPos.x},${conflictPos.z}`;
-        console.log(`[Builder] ❌ ${msg}`);
-        this.bot.chat(`❌ ${msg}`);
+        const msg = `❌ POSITION UNGÜLTIG: Fundament überschneidet Straße bei ${conflictPos.x},${conflictPos.z}. Bitte andere Position wählen.`;
+        console.log(`[Builder] ${msg}`);
+        this.bot.chat(msg);
         await new Promise(r => setTimeout(r, 1000));
-        throw new Error(msg);
+        return { status: 'error', message: msg };
       }
       
-      console.log(`[Builder] ✅ Fundament-Bereich frei von Straßen`);
+      console.log(`[Builder] ✅ Fundament-Bereich FREI von Straßen`);
 
       // ✅ FUNDAMENT: Basisfläche
       const foundationBlock = templateData.foundation || 'stone_bricks';
@@ -185,7 +234,6 @@ class Builder {
 
     for (let cx = minX; cx <= maxX; cx++) {
       for (let cz = minZ; cz <= maxZ; cz++) {
-        // Entferne alles über Bodenlevel bis y+6
         for (let cy = y; cy <= y + 6; cy++) {
           this.bot.chat(`/setblock ${cx} ${cy} ${cz} air`);
           await new Promise(r => setTimeout(r, 5));
