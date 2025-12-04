@@ -377,7 +377,7 @@ class StreetBuilder {
     for (const pos of positions) {
       const key = `${pos.x},${pos.z}`;
       if (!seen.has(key)) {
-        await this.placeLantern(buildY + 1, pos.x, pos.z);
+        await this.placeLantern(buildY, pos.x, pos.z);
         seen.add(key);
       }
     }
