@@ -1,4 +1,4 @@
-// builder.js - KOMPLETT GEFIXT MIT 4x1 FUNDAMENT CHECK
+// builder.js - KOMPLETT GEFIXT MIT 5x1 FUNDAMENT CHECK
 
 const fs = require('fs');
 const path = require('path');
@@ -34,8 +34,8 @@ class Builder {
         const streetX = Math.round(street.from.x + dx * progress);
         const streetZ = Math.round(street.from.z + dz * progress);
         
-        // ✅ 4x1 Breite Prüfung (statt 3x1)
-        for (let ox = -1; ox <= 2; ox++) {
+        // ✅ 5x1 Breite Prüfung (ox = -2 bis 2)
+        for (let ox = -2; ox <= 2; ox++) {
           if (x === streetX + ox && z === streetZ) {
             return true;
           }

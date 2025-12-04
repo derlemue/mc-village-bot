@@ -1,4 +1,4 @@
-// streets.js - STRAßEN +1 BREITER (4x1 statt 3x1)
+// streets.js - STRAßEN NOCHMAL +1 BREITER (5x1 statt 4x1)
 
 const fs = require('fs');
 const path = require('path');
@@ -42,7 +42,7 @@ class StreetBuilder {
     }
   }
 
-  // ✅ NEU: Prüft ob Position auf bestehender Straße liegt (4x1 Breite)
+  // ✅ NEU: Prüft ob Position auf bestehender Straße liegt (5x1 Breite)
   isPositionOnStreet(x, z) {
     for (const street of this.streets) {
       const dx = street.to.x - street.from.x;
@@ -54,8 +54,8 @@ class StreetBuilder {
         const streetX = Math.round(street.from.x + dx * progress);
         const streetZ = Math.round(street.from.z + dz * progress);
         
-        // ✅ BREITER: 4x1 statt 3x1
-        for (let ox = -1; ox <= 2; ox++) {
+        // ✅ NOCH BREITER: 5x1 statt 4x1
+        for (let ox = -2; ox <= 2; ox++) {
           if (x === streetX + ox && z === streetZ) {
             return true;
           }
@@ -104,8 +104,8 @@ class StreetBuilder {
     ];
 
     const safePoints = candidates.filter(p => {
-      // ✅ BREITER: 4x1
-      for (let ox = -1; ox <= 2; ox++) {
+      // ✅ NOCH BREITER: 5x1
+      for (let ox = -2; ox <= 2; ox++) {
         if (this.isPositionInAnyBuilding(p.x + ox, p.z) || this.isPositionOnStreet(p.x + ox, p.z)) {
           return false;
         }
@@ -137,8 +137,8 @@ class StreetBuilder {
     
     for (let i = 0; i < 32; i++) {
       let safe = true;
-      // ✅ BREITER: 4x1
-      for (let ox = -1; ox <= 2; ox++) {
+      // ✅ NOCH BREITER: 5x1
+      for (let ox = -2; ox <= 2; ox++) {
         if (this.isPositionInAnyBuilding(currentX + ox, currentZ)) {
           safe = false;
           break;
@@ -174,8 +174,8 @@ class StreetBuilder {
       const progress = step / totalSteps;
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
-      // ✅ BREITER: 4x1
-      for (let ox = -1; ox <= 2; ox++) {
+      // ✅ NOCH BREITER: 5x1
+      for (let ox = -2; ox <= 2; ox++) {
         if (this.isPositionInAnyBuilding(currentX + ox, currentZ)) {
           return false;
         }
@@ -375,8 +375,8 @@ class StreetBuilder {
       const progress = step / totalSteps;
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
-      // ✅ BREITER: 4x1 statt 3x1
-      for (let ox = -1; ox <= 2; ox++) {
+      // ✅ NOCH BREITER: 5x1 statt 4x1
+      for (let ox = -2; ox <= 2; ox++) {
         for (let clearY = buildY + 1; clearY <= buildY + 5; clearY++) {
           this.bot.chat(`/setblock ${currentX + ox} ${clearY} ${currentZ} air`);
           await new Promise(r => setTimeout(r, 10));
@@ -386,15 +386,15 @@ class StreetBuilder {
   }
 
   async buildPath(buildY, x1, z1, x2, z2) {
-    console.log(`🧱 Baue Straße ${x1},${z1} -> ${x2},${z2} (4x1)`);
+    console.log(`🧱 Baue Straße ${x1},${z1} -> ${x2},${z2} (5x1)`);
     const dx = x2 - x1, dz = z2 - z1;
     const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
     for (let step = 0; step <= totalSteps; step++) {
       const progress = step / totalSteps;
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
-      // ✅ BREITER: 4x1 statt 3x1
-      for (let ox = -1; ox <= 2; ox++) {
+      // ✅ NOCH BREITER: 5x1 statt 4x1
+      for (let ox = -2; ox <= 2; ox++) {
         this.bot.chat(`/setblock ${currentX + ox} ${buildY} ${currentZ} stone_bricks`);
         await new Promise(r => setTimeout(r, 20));
       }
@@ -403,20 +403,20 @@ class StreetBuilder {
   }
 
   async buildStreetLanterns(buildY, x1, z1, x2, z2) {
-    console.log(`💡 Baue Straßenlaternen (1 Block Abstand)`);
+    console.log(`💡 Baue Straßenlaternen (2 Blöcke Abstand)`);
     const dx = x2 - x1, dz = z2 - z1;
     const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
     const interval = 6;
     const isHorizontal = Math.abs(dx) >= Math.abs(dz);
-    // ✅ LATERNEN 2 BLÖCKE ENTFERNT (für 4x1 Straße)
-    const leftOff = isHorizontal ? [0, 2.5] : [-2.5, 0];
-    const rightOff = isHorizontal ? [0, -2.5] : [2.5, 0];
+    // ✅ LATERNEN 3 BLÖCKE ENTFERNT (für 5x1 Straße)
+    const leftOff = isHorizontal ? [0, 3] : [-3, 0];
+    const rightOff = isHorizontal ? [0, -3] : [3, 0];
     for (let step = 0; step <= totalSteps; step += interval) {
       const progress = step / totalSteps;
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
-      await this.placeLantern(buildY, currentX + Math.round(leftOff[0]), currentZ + Math.round(leftOff[1]));
-      await this.placeLantern(buildY, currentX + Math.round(rightOff[0]), currentZ + Math.round(rightOff[1]));
+      await this.placeLantern(buildY, currentX + leftOff[0], currentZ + leftOff[1]);
+      await this.placeLantern(buildY, currentX + rightOff[0], currentZ + rightOff[1]);
     }
   }
 
