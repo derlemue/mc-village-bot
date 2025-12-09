@@ -37,7 +37,8 @@ mc-village-bot/
 │   ├── stadium.js
 │   └── freiraum.js
 └── data/                   # Gespeicherte Laufzeit-Daten
-    └── streets.json
+    ├── streets.json
+    └── villages.json
 ```
 
 ## 🚀 Installation & Start
