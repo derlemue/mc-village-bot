@@ -44,7 +44,7 @@ class TerrainPreparer {
     // So fill range: 61 to buildingY - 1
 
     if (buildingY > 61) {
-      await this.commandHelper.fill(x, 61, z, x + width - 1, buildingY - 1, z + depth - 1, 'deepslate_tiles');
+      await this.commandHelper.fill(x, 61, z, x + width - 1, buildingY - 1, z + depth - 1, 'stone_bricks');
     }
 
     console.log(`[TerrainPreparer] ✅ FUNDAMENT FERTIG`);

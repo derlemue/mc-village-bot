@@ -419,7 +419,7 @@ class StreetBuilder {
       await this.commandHelper.fill(
         currentX - 2, buildY, currentZ,
         currentX + 2, buildY, currentZ,
-        'stone_bricks'
+        'bricks'
       );
     }
 
