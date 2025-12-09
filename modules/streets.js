@@ -390,7 +390,7 @@ class StreetBuilder {
     const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
 
     for (let step = 0; step <= totalSteps; step++) {
-      const progress = step / totalSteps;
+      const progress = totalSteps > 0 ? step / totalSteps : 0;
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
 
@@ -410,7 +410,7 @@ class StreetBuilder {
     const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
 
     for (let step = 0; step <= totalSteps; step++) {
-      const progress = step / totalSteps;
+      const progress = totalSteps > 0 ? step / totalSteps : 0;
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
 
@@ -438,7 +438,7 @@ class StreetBuilder {
     const rightOff = isHorizontal ? [0, -3] : [3, 0];
 
     for (let step = 0; step <= totalSteps; step += interval) {
-      const progress = step / totalSteps;
+      const progress = totalSteps > 0 ? step / totalSteps : 0;
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
 
