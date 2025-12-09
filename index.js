@@ -216,7 +216,7 @@ async function connectBot() {
                   await movement.moveBackToStart();
 
                   // Kurze Pause vor nächstem Gebäude
-                  await new Promise(r => setTimeout(r, 2000));
+                  await new Promise(r => setTimeout(r, 5000));
                 }
               }
               // ✅ Build fehlgeschlagen - verschiebe Position und versuche erneut
