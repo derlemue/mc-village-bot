@@ -450,11 +450,11 @@ class StreetBuilder {
   async placeLantern(buildY, x, z) {
     // ✅ Unterer Block (Pfosten) auf buildY
     this.bot.chat(`/setblock ${x} ${buildY + 1} ${z} stone_bricks`);
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 20));
 
     // ✅ LATERNE Y+1 HÖHER: buildY + 2 statt buildY + 1
     this.bot.chat(`/setblock ${x} ${buildY + 2} ${z} lantern`);
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise(r => setTimeout(r, 20));
   }
 }
 

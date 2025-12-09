@@ -53,7 +53,7 @@ class CommandHelper {
             if (volume <= 32700) {
                 //  console.log(`[CommandHelper] ⚡ /fill ${minX},${minY},${minZ} -> ${maxX},${maxY},${maxZ} (${volume} blocks)`);
                 this.bot.chat(`/fill ${minX} ${minY} ${minZ} ${maxX} ${maxY} ${maxZ} ${block}`);
-                await new Promise(r => setTimeout(r, 250));
+                await new Promise(r => setTimeout(r, 80));
                 continue;
             }
 
