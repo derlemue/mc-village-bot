@@ -190,7 +190,7 @@ class Builder {
 
     } catch (error) {
       console.error('[Builder] ❌ Build failed:', error.message);
-      this.bot.chat(`❌ Build Fehler - ${error.message}`);
+      console.log(`[Bot] ❌ Build Fehler - ${error.message}`);
       await new Promise(r => setTimeout(r, 1000));
       return { status: 'error', message: error.message };
     }
