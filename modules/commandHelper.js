@@ -5,76 +5,83 @@ class CommandHelper {
 
     /**
      * Fills a region with a block, automatically splitting into chunks if > 32768 blocks.
-     * Uses recursive splitting to ensure all chunks are valid.
+     * IMPROVED: Uses iterative approach (stack) to prevent Maximum Call Stack Size Exceeded errors.
      */
     async fill(x1, y1, z1, x2, y2, z2, block) {
-        // ✅ Ensure integers to prevent infinite recursion on float coordinates
-        const minX = Math.floor(Math.min(x1, x2));
-        const maxX = Math.floor(Math.max(x1, x2));
-        const minY = Math.floor(Math.min(y1, y2));
-        const maxY = Math.floor(Math.max(y1, y2));
-        const minZ = Math.floor(Math.min(z1, z2));
-        const maxZ = Math.floor(Math.max(z1, z2));
+        // Quantize coordinates to integers immediately
+        const startRegion = {
+            minX: Math.floor(Math.min(x1, x2)),
+            maxX: Math.floor(Math.max(x1, x2)),
+            minY: Math.floor(Math.min(y1, y2)),
+            maxY: Math.floor(Math.max(y1, y2)),
+            minZ: Math.floor(Math.min(z1, z2)),
+            maxZ: Math.floor(Math.max(z1, z2))
+        };
 
-        const width = maxX - minX + 1;
-        const height = maxY - minY + 1;
-        const depth = maxZ - minZ + 1;
-        const volume = width * height * depth;
+        const stack = [startRegion];
 
-        // Minecraft limit is 32768 blocks
-        if (volume <= 32700) { // Safety margin
-            console.log(`[CommandHelper] ⚡ /fill ${minX},${minY},${minZ} -> ${maxX},${maxY},${maxZ} (${volume} blocks)`);
-            this.bot.chat(`/fill ${minX} ${minY} ${minZ} ${maxX} ${maxY} ${maxZ} ${block}`);
-            await new Promise(r => setTimeout(r, 50)); // Short delay to prevent spam kick
-            return;
-        }
+        while (stack.length > 0) {
+            const region = stack.pop();
+            const { minX, maxX, minY, maxY, minZ, maxZ } = region;
 
-        // Safety check: If volume is huge but we can't split (dimensions are 1?), stop recursion
-        if (width === 1 && height === 1 && depth === 1) {
-            console.log(`[CommandHelper] ⚠️ Single block volume > 32700? Impossible state. ${volume}`);
-            return;
-        }
+            // Integrity check for corrupted regions
+            if (minX > maxX || minY > maxY || minZ > maxZ) continue;
 
-        // Split along the longest axis
-        if (width >= height && width >= depth) {
-            const midX = Math.floor((minX + maxX) / 2);
-            // Ensure we actually split
-            if (midX === maxX) {
-                await this.fill(minX, minY, minZ, midX - 1, maxY, maxZ, block);
-                await this.fill(midX, minY, minZ, maxX, maxY, maxZ, block);
-            } else {
-                await this.fill(minX, minY, minZ, midX, maxY, maxZ, block);
-                await this.fill(midX + 1, minY, minZ, maxX, maxY, maxZ, block);
+            const width = maxX - minX + 1;
+            const height = maxY - minY + 1;
+            const depth = maxZ - minZ + 1;
+
+            // Base case: Safety against extremely dense infinite loops
+            // If any dimension is 0 or less (should be caught by continue above), skip.
+            // If volume is processed
+            const volume = width * height * depth;
+
+            // Minecraft limit is 32768 blocks
+            if (volume <= 32700) {
+                console.log(`[CommandHelper] ⚡ /fill ${minX},${minY},${minZ} -> ${maxX},${maxY},${maxZ} (${volume} blocks)`);
+                this.bot.chat(`/fill ${minX} ${minY} ${minZ} ${maxX} ${maxY} ${maxZ} ${block}`);
+                await new Promise(r => setTimeout(r, 50));
+                continue;
             }
-        } else if (height >= width && height >= depth) {
-            const midY = Math.floor((minY + maxY) / 2);
-            if (midY === maxY) {
-                await this.fill(minX, minY, minZ, maxX, midY - 1, maxZ, block);
-                await this.fill(minX, midY, minZ, maxX, maxY, maxZ, block);
+
+            // Split logic: Always split the largest dimension that is > 1
+            // If all dimensions are 1, volume is 1, so it would have been caught above.
+
+            if (width >= height && width >= depth) {
+                // Split X
+                const midX = Math.floor((minX + maxX) / 2);
+                // Push right part first (processed last)
+                stack.push({
+                    minX: midX + 1, maxX: maxX, minY, maxY, minZ, maxZ
+                });
+                // Push left part second (processed first)
+                stack.push({
+                    minX: minX, maxX: midX, minY, maxY, minZ, maxZ
+                });
+            } else if (height >= width && height >= depth) {
+                // Split Y
+                const midY = Math.floor((minY + maxY) / 2);
+                stack.push({
+                    minX, maxX, minY: midY + 1, maxY: maxY, minZ, maxZ
+                });
+                stack.push({
+                    minX, maxX, minY: minY, maxY: midY, minZ, maxZ
+                });
             } else {
-                await this.fill(minX, minY, minZ, maxX, midY, maxZ, block);
-                await this.fill(minX, midY + 1, minZ, maxX, maxY, maxZ, block);
-            }
-        } else {
-            const midZ = Math.floor((minZ + maxZ) / 2);
-            if (midZ === maxZ) {
-                await this.fill(minX, minY, minZ, maxX, maxY, midZ - 1, block);
-                await this.fill(minX, minY, midZ, maxX, maxY, maxZ, block);
-            } else {
-                await this.fill(minX, minY, minZ, maxX, maxY, midZ, block);
-                await this.fill(minX, minY, midZ + 1, maxX, maxY, maxZ, block);
+                // Split Z
+                const midZ = Math.floor((minZ + maxZ) / 2);
+                stack.push({
+                    minX, maxX, minY, maxY, minZ: midZ + 1, maxZ: maxZ
+                });
+                stack.push({
+                    minX, maxX, minY, maxY, minZ: minZ, maxZ: midZ
+                });
             }
         }
     }
 
-    /**
-     * Optional: Fill with replace filter (e.g., replace air with stone)
-     */
     async fillReplace(x1, y1, z1, x2, y2, z2, block, replaceBlock) {
-        // Similar splitting logic would go here if needed, 
-        // but simply calling the chat command with "replace" suffix works if volume is handled.
-        // For now, simple fill is enough for the task.
-        this.bot.chat(`⚠️ fillReplace not fully implemented with chunking yet.`);
+        console.log(`⚠️ fillReplace not fully implemented with chunking yet.`);
     }
 }
 

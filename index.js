@@ -25,7 +25,7 @@ try {
 
 async function connectBot() {
   console.log('🔄 Bot verbindet...');
-  
+
   const templateLoader = new TemplateLoader();
   const config = {
     host: process.env.MC_HOST || '46.224.3.29',
@@ -69,15 +69,15 @@ async function connectBot() {
         if (command === 'stop') {
           global.GLOBAL_IS_BUILDING = false;
           if (movement && movement.stop) movement.stop();
-          bot.chat('🛑 BUILD GESTOPPT!');
+          console.log('[Bot] 🛑 BUILD GESTOPPT!');
           return;
         }
 
         if (command === 'templates') {
           try {
-            bot.chat('📋 Templates: ' + templateLoader.getTemplateNames().join(', '));
+            console.log('[Bot] 📋 Templates: ' + templateLoader.getTemplateNames().join(', '));
           } catch (e) {
-            bot.chat('❌ Templates Fehler');
+            console.log('[Bot] ❌ Templates Fehler');
           }
           return;
         }
@@ -91,32 +91,32 @@ async function connectBot() {
           try {
             // ✅ Validiere Input
             if (isNaN(x) || isNaN(y) || isNaN(z) || isNaN(count)) {
-              bot.chat('❌ Ungültige Koordinaten oder Anzahl!');
-              bot.chat('Verwendung: !build <x> <y> <z> [template] [count]');
+              console.log('[Bot] ❌ Ungültige Koordinaten oder Anzahl!');
+              console.log('[Bot] Verwendung: !build <x> <y> <z> [template] [count]');
               global.GLOBAL_IS_BUILDING = false;
               return;
             }
 
             const templateData = templateLoader.getTemplate(templateName);
             if (!templateData) {
-              bot.chat('❌ Template nicht gefunden: ' + templateName);
+              console.log('[Bot] ❌ Template nicht gefunden: ' + templateName);
               global.GLOBAL_IS_BUILDING = false;
               return;
             }
 
             console.log(`[Index] 🎯 BUILD-BEFEHL: ${count}x ${templateName} ab (${x},${y},${z})`);
-            
+
             const village = villageManager.findOrCreateVillage(x, y, z);
             let successCount = 0;
             let previousBuilding = null;
 
             for (let i = 0; i < count && global.GLOBAL_IS_BUILDING; i++) {
               console.log(`[Index] 🔢 Gebäude ${i + 1}/${count}`);
-              
+
               // ✅ KRITISCH: Nutze Builder zur Position-Validierung
               console.log(`[Index] 🔍 Suche valide Position ohne Straßen-Konflikt...`);
               const pos = villageManager.findFreePosition(village, templateData.width, templateData.depth);
-              
+
               if (!pos) {
                 console.log(`[Index] ❌ Keine valide Position nach Versuchen gefunden`);
                 bot.chat(`❌ Keine valide Position für ${templateData.name} - keine freie Fläche ohne Straßen!`);
@@ -124,13 +124,13 @@ async function connectBot() {
               }
 
               const building = {
-                x: pos.x, 
-                y: y, 
-                z: pos.z, 
+                x: pos.x,
+                y: y,
+                z: pos.z,
                 width: templateData.width,
-                depth: templateData.depth, 
+                depth: templateData.depth,
                 height: templateData.height,
-                name: `${templateData.name} #${i+1}`,
+                name: `${templateData.name} #${i + 1}`,
                 doorPos: templateData.doorPos || { x: Math.floor(templateData.width / 2), z: 0 }
               };
 
@@ -142,22 +142,22 @@ async function connectBot() {
                 break;
               }
 
-              bot.chat(`🏗️ ${building.name} (${i+1}/${count})`);
+              bot.chat(`🏗️ ${building.name} (${i + 1}/${count})`);
               console.log(`[Index] 🧹 Bereite Fläche vor...`);
               await terrainPreparer.prepareBuildingArea(building);
 
               console.log(`[Index] 🚧 Baue Gebäude...`);
               const result = await builder.buildBuilding(building, templateData);
-              
+
               // ✅ Nur weitermachen wenn Build erfolgreich
               if (result && result.status === 'success') {
                 console.log(`[Index] ✅ Gebäude erfolgreich gebaut!`);
                 villageManager.addBuildingToVillage(village, building);
-                
+
                 // ✅ Update StreetBuilder mit neuesten Villages
                 streetBuilder.villages = villageManager.villages;
                 console.log('[Index] 🔄 StreetBuilder villages reloaded');
-                
+
                 successCount++;
 
                 // ✅ ERSTES GEBÄUDE: Straße zum Zentrum
@@ -171,7 +171,7 @@ async function connectBot() {
                     console.error('[Index] ❌ Fehler bei Zentrum-Straße:', err.message, err.stack);
                     bot.chat(`⚠️ Fehler bei Zentrum-Straße: ${err.message}`);
                   }
-                  
+
                   try {
                     await streetBuilder.buildLanternPosts(y, building);
                     console.log(`[Index] ✅ Laternen um ${building.name} gebaut`);
@@ -180,7 +180,7 @@ async function connectBot() {
                     console.error('[Index] ❌ Laternen Fehler:', lanternErr.message, lanternErr.stack);
                     bot.chat(`⚠️ Laternen Fehler: ${lanternErr.message}`);
                   }
-                } 
+                }
                 // ✅ WEITERE GEBÄUDE: Straße zum vorherigen
                 else if (previousBuilding) {
                   console.log(`[Index] 🛣️ STARTE Straßenbau: ${previousBuilding.name} -> ${building.name}`);
@@ -192,7 +192,7 @@ async function connectBot() {
                     console.error('[Index] ❌ Straßenbau Fehler:', streetErr.message, streetErr.stack);
                     bot.chat(`⚠️ Straßenbau Fehler: ${streetErr.message}`);
                   }
-                  
+
                   try {
                     await streetBuilder.buildLanternPosts(y, building);
                     console.log(`[Index] ✅ Laternen um ${building.name} gebaut`);
@@ -201,30 +201,30 @@ async function connectBot() {
                     console.error('[Index] ❌ Laternen Fehler:', lanternErr.message, lanternErr.stack);
                     bot.chat(`⚠️ Laternen Fehler: ${lanternErr.message}`);
                   }
-                } 
+                }
                 else {
                   console.log(`[Index] ⏭️ Gebäude ${building.name} ohne Straße (Fehler vorher?)`);
                 }
 
                 previousBuilding = building;
                 bot.chat(`✅ ${building.name} komplett!`);
-                
+
                 // ✅ Zurück zum Start wenn noch mehr Gebäude
                 if (global.GLOBAL_IS_BUILDING && i < count - 1) {
                   console.log(`[Index] 🏠 Gehe zurück zum Start`);
-                  bot.chat('🏠 Zurück...');
+                  console.log('[Bot] 🏠 Zurück...');
                   await movement.moveBackToStart();
-                  
+
                   // Kurze Pause vor nächstem Gebäude
                   await new Promise(r => setTimeout(r, 2000));
                 }
-              } 
+              }
               // ✅ Build fehlgeschlagen - verschiebe Position und versuche erneut
               else {
                 console.log(`[Index] ❌ Gebäude-Build fehlgeschlagen: ${result?.message || 'Unbekannter Fehler'}`);
                 bot.chat(`⚠️ Position ungültig - versuche nächste Position...`);
                 i--; // Versuch nochmal mit neuer Position
-                
+
                 // Limit: nicht endlos versuchen
                 if (i < -10) {
                   console.log(`[Index] 🛑 Zu viele Fehlversuche - breche ab`);
@@ -233,12 +233,12 @@ async function connectBot() {
                 }
               }
             }
-            
+
             console.log(`[Index] 🎉 FERTIG: ${successCount}/${count} Gebäude gebaut`);
             bot.chat(`🎉 ${successCount}/${count} fertig!`);
           } catch (err) {
             console.error('[Build Error]:', err.message, err.stack);
-            bot.chat('❌ Build Fehler: ' + err.message);
+            console.log('[Bot] ❌ Build Fehler: ' + err.message);
           } finally {
             global.GLOBAL_IS_BUILDING = false;
             console.log(`[Index] 🏁 Build-Loop beendet`);
