@@ -120,7 +120,7 @@ class Builder {
       if (hasConflict) {
         const msg = `❌ POSITION UNGÜLTIG: Fundament überschneidet Straße bei ${conflictPos.x},${conflictPos.z}. Bitte andere Position wählen.`;
         console.log(`[Builder] ${msg}`);
-        this.bot.chat(msg);
+        // this.bot.chat(msg); // Silenced by user request
         await new Promise(r => setTimeout(r, 1000));
         return { status: 'error', message: msg };
       }
