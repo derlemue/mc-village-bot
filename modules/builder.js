@@ -1,11 +1,13 @@
-// builder.js - KOMPLETT GEFIXT: FUNDAMENT DARF KEINE STRAßEN ÜBERBAUEN
+// builder.js - OPTIMIZED WITH /FILL COMMANDS
 
 const fs = require('fs');
 const path = require('path');
+const CommandHelper = require('./commandHelper');
 
 class Builder {
   constructor(bot) {
     this.bot = bot;
+    this.commandHelper = new CommandHelper(bot);
   }
 
   loadStreets() {
@@ -28,12 +30,12 @@ class Builder {
       const dx = street.to.x - street.from.x;
       const dz = street.to.z - street.from.z;
       const totalSteps = Math.max(Math.abs(dx), Math.abs(dz));
-      
+
       for (let step = 0; step <= totalSteps; step++) {
         const progress = step / totalSteps;
         const streetX = Math.round(street.from.x + dx * progress);
         const streetZ = Math.round(street.from.z + dz * progress);
-        
+
         // ✅ 5x1 Breite Prüfung
         for (let ox = -2; ox <= 2; ox++) {
           if (x === streetX + ox && z === streetZ) {
@@ -125,53 +127,31 @@ class Builder {
 
       console.log(`[Builder] ✅ Fundament-Bereich FREI von Straßen`);
 
-      // ✅ FUNDAMENT: Basisfläche
+      // ✅ FUNDAMENT: Basisfläche (/fill)
       const foundationBlock = templateData.foundation || 'stone_bricks';
       console.log(`[Builder] 🧱 Fundament ${foundationBlock}`);
-      for (let fx = x; fx < x + width; fx++) {
-        for (let fz = z; fz < z + depth; fz++) {
-          this.bot.chat(`/setblock ${fx} ${y} ${fz} ${foundationBlock}`);
-          await new Promise(r => setTimeout(r, 10));
-        }
-      }
+      await this.commandHelper.fill(x, y, z, x + width - 1, y, z + depth - 1, foundationBlock);
 
-      // ✅ WÄNDE: Höhe und Seiten
+      // ✅ WÄNDE: Höhe und Seiten (/fill)
       const wallBlock = templateData.wall || 'oak_planks';
       console.log(`[Builder] 🧱 Wände ${wallBlock}`);
-      for (let wy = y + 1; wy < y + height; wy++) {
-        // Vorderseite
-        for (let wx = x; wx < x + width; wx++) {
-          this.bot.chat(`/setblock ${wx} ${wy} ${z} ${wallBlock}`);
-          await new Promise(r => setTimeout(r, 10));
-        }
-        // Rückseite
-        for (let wx = x; wx < x + width; wx++) {
-          this.bot.chat(`/setblock ${wx} ${wy} ${z + depth - 1} ${wallBlock}`);
-          await new Promise(r => setTimeout(r, 10));
-        }
-        // Linke Seite
-        for (let wz = z + 1; wz < z + depth - 1; wz++) {
-          this.bot.chat(`/setblock ${x} ${wy} ${wz} ${wallBlock}`);
-          await new Promise(r => setTimeout(r, 10));
-        }
-        // Rechte Seite
-        for (let wz = z + 1; wz < z + depth - 1; wz++) {
-          this.bot.chat(`/setblock ${x + width - 1} ${wy} ${wz} ${wallBlock}`);
-          await new Promise(r => setTimeout(r, 10));
-        }
-      }
+      const wallEndY = y + height - 1;
 
-      // ✅ DACH: Oberste Ebene
+      // Wall 1 (Back)
+      await this.commandHelper.fill(x, y + 1, z, x + width - 1, wallEndY, z, wallBlock); // Front? z
+      // Wall 2 (Front)
+      await this.commandHelper.fill(x, y + 1, z + depth - 1, x + width - 1, wallEndY, z + depth - 1, wallBlock);
+      // Wall 3 (Left)
+      await this.commandHelper.fill(x, y + 1, z + 1, x, wallEndY, z + depth - 2, wallBlock);
+      // Wall 4 (Right)
+      await this.commandHelper.fill(x + width - 1, y + 1, z + 1, x + width - 1, wallEndY, z + depth - 2, wallBlock);
+
+      // ✅ DACH: Oberste Ebene (/fill)
       const roofBlock = templateData.roof || 'spruce_stairs';
       console.log(`[Builder] 🏠 Dach ${roofBlock}`);
-      for (let rx = x; rx < x + width; rx++) {
-        for (let rz = z; rz < z + depth; rz++) {
-          this.bot.chat(`/setblock ${rx} ${y + height} ${rz} ${roofBlock}`);
-          await new Promise(r => setTimeout(r, 10));
-        }
-      }
+      await this.commandHelper.fill(x, y + height, z, x + width - 1, y + height, z + depth - 1, roofBlock);
 
-      // ✅ DETAILS: Fenster, Dekoration
+      // ✅ DETAILS: Fenster, Dekoration (Muss weiterhin einzeln sein, da spezifische Positionen)
       console.log(`[Builder] 🪟 Details platzieren`);
       if (templateData.details && Array.isArray(templateData.details)) {
         for (const detail of templateData.details) {
@@ -179,7 +159,7 @@ class Builder {
           const detailY = y + detail.y;
           const detailZ = z + detail.z;
           this.bot.chat(`/setblock ${detailX} ${detailY} ${detailZ} ${detail.block}`);
-          await new Promise(r => setTimeout(r, 15));
+          await new Promise(r => setTimeout(r, 10)); // Faster 10ms
         }
       }
 
@@ -189,9 +169,9 @@ class Builder {
       const doorZ = z + (building.doorPos?.z || 0);
       const doorBlock = templateData.door || 'oak_door';
       this.bot.chat(`/setblock ${doorX} ${y + 1} ${doorZ} ${doorBlock}`);
-      await new Promise(r => setTimeout(r, 100));
+      await new Promise(r => setTimeout(r, 50));
       this.bot.chat(`/setblock ${doorX} ${y + 2} ${doorZ} ${doorBlock}[upper=true]`);
-      await new Promise(r => setTimeout(r, 100));
+      await new Promise(r => setTimeout(r, 50));
 
       // ✅ BELEUCHTUNG: Innenlaternen (Optional)
       if (templateData.lights && Array.isArray(templateData.lights)) {
@@ -201,7 +181,7 @@ class Builder {
           const lightY = y + light.y;
           const lightZ = z + light.z;
           this.bot.chat(`/setblock ${lightX} ${lightY} ${lightZ} lantern`);
-          await new Promise(r => setTimeout(r, 15));
+          await new Promise(r => setTimeout(r, 10));
         }
       }
 
@@ -223,14 +203,10 @@ class Builder {
     const minZ = z - radius;
     const maxZ = z + depth + radius;
     console.log(`[Builder] 🧹 Räume Bereich um ${building.name} auf...`);
-    for (let cx = minX; cx <= maxX; cx++) {
-      for (let cz = minZ; cz <= maxZ; cz++) {
-        for (let cy = y; cy <= y + 6; cy++) {
-          this.bot.chat(`/setblock ${cx} ${cy} ${cz} air`);
-          await new Promise(r => setTimeout(r, 5));
-        }
-      }
-    }
+
+    // Use fill for air
+    await this.commandHelper.fill(minX, y, minZ, maxX, y + 6, maxZ, 'air');
+
     console.log(`[Builder] ✅ Bereich geleert`);
   }
 
@@ -241,12 +217,10 @@ class Builder {
     const minZ = z - radius;
     const maxZ = z + depth + radius;
     console.log(`[Builder] 🪨 Ebne Grundfläche`);
-    for (let fx = minX; fx <= maxX; fx++) {
-      for (let fz = minZ; fz <= maxZ; fz++) {
-        this.bot.chat(`/setblock ${fx} ${y - 1} ${fz} grass_block`);
-        await new Promise(r => setTimeout(r, 5));
-      }
-    }
+
+    // Use fill for grass
+    await this.commandHelper.fill(minX, y - 1, minZ, maxX, y - 1, maxZ, 'grass_block');
+
     console.log(`[Builder] ✅ Fläche geebnet`);
   }
 }

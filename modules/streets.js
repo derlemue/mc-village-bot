@@ -1,12 +1,14 @@
-// streets.js - LATERNEN Y+1 HÖHER + STRAßEN 5 BLÖCKE BREIT
+// streets.js - OPTIMIZED WITH /FILL COMMANDS
 
 const fs = require('fs');
 const path = require('path');
+const CommandHelper = require('./commandHelper');
 
 class StreetBuilder {
   constructor(bot, villageManager) {
     this.bot = bot;
     this.villageManager = villageManager;
+    this.commandHelper = new CommandHelper(bot);
     this.streetsFile = path.join(process.cwd(), 'data', 'streets.json');
     this.streets = this.loadStreets();
     this.villages = this.villageManager.villages;
@@ -71,7 +73,7 @@ class StreetBuilder {
         const width = building.width || 16;
         const depth = building.depth || 16;
         if (x >= building.x && x < building.x + width &&
-            z >= building.z && z < building.z + depth) {
+          z >= building.z && z < building.z + depth) {
           return true;
         }
       }
@@ -361,7 +363,7 @@ class StreetBuilder {
     console.log(`🗼 Baue Laternen um ${building.name}`);
     const width = building.width || 16;
     const depth = building.depth || 16;
-    const interval = 6, offset = 1;
+    const interval = 10, offset = 1; // Updated to 10 as per previous task
     const minX = building.x - offset, maxX = building.x + width + offset;
     const minZ = building.z - offset, maxZ = building.z + depth + offset;
 
@@ -392,13 +394,13 @@ class StreetBuilder {
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
 
-      // ✅ 5x1 Breite + höher räumen (bis buildY + 6)
-      for (let ox = -2; ox <= 2; ox++) {
-        for (let clearY = buildY + 1; clearY <= buildY + 6; clearY++) {
-          this.bot.chat(`/setblock ${currentX + ox} ${clearY} ${currentZ} air`);
-          await new Promise(r => setTimeout(r, 10));
-        }
-      }
+      // ✅ 5x1 Breite + höher räumen (bis buildY + 6) -> /fill
+      // currentX - 2 to currentX + 2
+      await this.commandHelper.fill(
+        currentX - 2, buildY + 1, currentZ,
+        currentX + 2, buildY + 6, currentZ,
+        'air'
+      );
     }
   }
 
@@ -412,11 +414,13 @@ class StreetBuilder {
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
 
-      // ✅ 5x1 Breite: ox -2 bis 2
-      for (let ox = -2; ox <= 2; ox++) {
-        this.bot.chat(`/setblock ${currentX + ox} ${buildY} ${currentZ} stone_bricks`);
-        await new Promise(r => setTimeout(r, 20));
-      }
+      // ✅ 5x1 Breite -> /fill
+      // currentX - 2 to currentX + 2
+      await this.commandHelper.fill(
+        currentX - 2, buildY, currentZ,
+        currentX + 2, buildY, currentZ,
+        'stone_bricks'
+      );
     }
 
     console.log(`✅ Straße fertig`);
@@ -446,11 +450,11 @@ class StreetBuilder {
   async placeLantern(buildY, x, z) {
     // ✅ Unterer Block (Pfosten) auf buildY
     this.bot.chat(`/setblock ${x} ${buildY + 1} ${z} stone_bricks`);
-    await new Promise(r => setTimeout(r, 100));
+    await new Promise(r => setTimeout(r, 50));
 
     // ✅ LATERNE Y+1 HÖHER: buildY + 2 statt buildY + 1
     this.bot.chat(`/setblock ${x} ${buildY + 2} ${z} lantern`);
-    await new Promise(r => setTimeout(r, 100));
+    await new Promise(r => setTimeout(r, 50));
   }
 }
 
