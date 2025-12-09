@@ -100,4 +100,3 @@ Der `CommandHelper` ist das Herzstück der Performance. Er fängt `/fill` Befehl
 Dieses Projekt darf kostenlos verwendet, modifiziert und privat oder in Non-Profit-Kontexten eingesetzt werden. Eine kommerzielle Nutzung (Verkauf, kostenpflichtige Services basierend auf diesem Code) ist ohne Genehmigung nicht gestattet.
 
 ---
-*Built with ❤️ by Antigravity*
