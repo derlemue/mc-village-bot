@@ -3,8 +3,9 @@
 ![License](https://img.shields.io/badge/license-Free%20for%20Non--Commercial%20Use-blue.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D18-green.svg)
 ![Status](https://img.shields.io/badge/status-active-success.svg)
+![Version](https://img.shields.io/badge/version-2.0.0-blue.svg)
 
-Ein hochoptimierter, modularer Minecraft-Bot, der in der Lage ist, ganze Dörfer mit Infrastruktur, Wegen und Gebäuden vollautomatisch zu errichten.
+Ein hochoptimierter, modularer Minecraft-Bot, der in der Lage ist, ganze Dörfer mit Infrastruktur, Wegen und Gebäuden vollautomatisch zu errichten. Version 2.0.0 bietet verbesserte Performance und stabilere Bau-Algorithmen.
 
 ## ✨ Features
 
@@ -36,12 +37,22 @@ mc-village-bot/
 │   ├── schloss.js
 │   ├── stadium.js
 │   └── freiraum.js
-└── data/                   # Gespeicherte Laufzeit-Daten
-    ├── streets.json
-    └── villages.json
+├── scripts/                # Hilfs-Skripte
+├── data/                   # Laufzeit-Daten (Automatisch generiert)
+│   ├── streets.json
+│   └── buildings.json
+├── Dockerfile              # Docker Image Definition
+├── docker-compose.yml      # Docker Services (Bot + optional DB/Server)
+└── .env.example            # Konfigurations-Beispiel
 ```
 
 ## 🚀 Installation & Start
+
+### Voraussetzung
+- Node.js >= 18
+- Ein laufender Minecraft Server (Version 1.8 - 1.20 supported by mineflayer)
+
+### Option A: Lokal (Node.js)
 
 1. **Repository klonen**
    ```bash
@@ -68,9 +79,22 @@ mc-village-bot/
    npm start
    ```
 
+### Option B: Docker
+
+1. **Image bauen**
+   ```bash
+   docker-compose build
+   ```
+
+2. **Container starten**
+   ```bash
+   docker-compose up -d
+   ```
+   *Hinweis: Stelle sicher, dass die `.env` Datei korrekt konfiguriert ist.*
+
 ## 🎮 Befehle (In-Game Chat)
 
-Der Bot reagiert auf Chat-Befehle von Spielern:
+Der Bot reagiert auf Chat-Befehle von Spielern (Prefix `!`):
 
 | Befehl | Beschreibung | Beispiel |
 |--------|--------------|----------|
@@ -84,19 +108,17 @@ Der Bot reagiert auf Chat-Befehle von Spielern:
 Der `CommandHelper` ist das Herzstück der Performance. Er fängt `/fill` Befehle ab:
 - **Validation**: Prüft Koordinaten auf `NaN` oder `Infinity`.
 - **Chunking**: Zerlegt Volumen > 32.768 Blöcke in kleinere Cuboids.
-- **Safety**: Nutzt eine iterative Stack-Logik statt Rekursion, um `Maximum Call Stack Size Exceeded` zu verhindern.
-- **Rate-Limit**: Fügt 250ms Verzögerung zwischen Befehlen ein.
+- **Safety**: Nutzt eine iterative Stack-Logik statt Rekursion, um `Stack Overflow` zu verhindern.
+- **Rate-Limit**: Fügt Verzögerung zwischen Befehlen ein, um Server-Überlastung zu vermeiden.
 
 ### Straßenbau (StreetBuilder)
 - Prüft 5x1 breite Korridore auf Hindernisse.
 - Baut Straßen automatisch auf `buildY`.
-- Hebt Gelände an oder senkt es ab (Clearance).
-- Platziert Laternen in regelmäßigen Abständen.
+- Hebt Gelände an oder senkt es ab (Clearance) für ebene Straßen.
+- Platziert Laternen in regelmäßigen Abständen (alle 6 Blöcke).
 
 ## 📄 Lizenz
 
 **Freie Nutzung für nicht-kommerzielle Zwecke.**
 
-Dieses Projekt darf kostenlos verwendet, modifiziert und privat oder in Non-Profit-Kontexten eingesetzt werden. Eine kommerzielle Nutzung (Verkauf, kostenpflichtige Services basierend auf diesem Code) ist ohne Genehmigung nicht gestattet.
-
----
+Dieses Projekt darf kostenlos verwendet, modifiziert und privat oder in Non-Profit-Kontexten eingesetzt werden. Eine kommerzielle Nutzung ist ohne Genehmigung nicht gestattet.
