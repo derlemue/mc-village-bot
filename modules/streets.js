@@ -135,37 +135,57 @@ class StreetBuilder {
     let currentZ = startZ;
 
     for (let i = 0; i < 32; i++) {
-      let safe = true;
-      // ✅ 5x1 Prüfung
-      for (let ox = -2; ox <= 2; ox++) {
-        if (this.isPositionInAnyBuilding(currentX + ox, currentZ)) {
-          safe = false;
-          break;
+      // Prüfen ob wir noch auf dem Fundament des Startgebäudes sind
+      const onFoundation = this.isPositionInSpecificBuilding(currentX, currentZ, building);
+
+      // Prüfen ob wir in einem ANDEREN Gebäude sind (Kollision)
+      let collision = false;
+      for (const village of this.villages) {
+        for (const otherB of village.buildings) {
+          if (otherB === building) continue;
+          if (this.isPositionInSpecificBuilding(currentX, currentZ, otherB)) {
+            collision = true;
+            break;
+          }
         }
+        if (collision) break;
       }
 
-      if (!safe) {
-        console.log(`🛑 Gebäude bei ${currentX},${currentZ}`);
+      if (collision) {
+        console.log(`🛑 Blockiert durch anderes Gebäude bei ${currentX},${currentZ}`);
         break;
       }
 
       pathPoints.push({ x: currentX, z: currentZ });
+
+      // Wenn wir das Fundament verlassen haben, ist das der Rand ("Ab diesem Punkt")
+      if (!onFoundation) {
+        console.log(`✅ Rand gefunden (Verlassen Foundation): ${currentX},${currentZ}`);
+        break;
+      }
+
       currentX += direction.stepX;
       currentZ += direction.stepZ;
     }
 
     if (pathPoints.length === 0) {
-      console.log('❌ Kein Rand gefunden - verwende nächsten sicheren Punkt');
+      console.log('❌ Kein Weg gefunden');
       return null;
     }
 
     const edgeX = pathPoints[pathPoints.length - 1].x;
     const edgeZ = pathPoints[pathPoints.length - 1].z;
-    console.log(`✅ Rand gefunden: ${edgeX},${edgeZ}`);
 
     await this.clearAbove(buildY, startX, startZ, edgeX, edgeZ);
     await this.buildPath(buildY, startX, startZ, edgeX, edgeZ);
     return { x: edgeX, z: edgeZ };
+  }
+
+  isPositionInSpecificBuilding(x, z, building) {
+    const width = building.width || 16;
+    const depth = building.depth || 16;
+    return (x >= building.x && x < building.x + width &&
+      z >= building.z && z < building.z + depth);
   }
 
   isPathFree(buildY, x1, z1, x2, z2) {
@@ -394,11 +414,10 @@ class StreetBuilder {
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
 
-      // ✅ 5x1 Breite + höher räumen (bis buildY + 6) -> /fill
-      // currentX - 2 to currentX + 2
+      // ✅ Erweiterte Räumung: y+64, x/z +/- 4 (Freiraum)
       await this.commandHelper.fill(
-        currentX - 2, buildY + 1, currentZ,
-        currentX + 2, buildY + 6, currentZ,
+        currentX - 4, buildY + 1, currentZ - 4,
+        currentX + 4, buildY + 64, currentZ + 4,
         'air'
       );
     }
