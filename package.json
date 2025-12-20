@@ -1,6 +1,6 @@
 {
   "name": "mc-village-bot",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Minecraft Village Builder Bot",
   "main": "index.js",
   "scripts": {

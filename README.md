@@ -3,9 +3,9 @@
 ![License](https://img.shields.io/badge/license-Free%20for%20Non--Commercial%20Use-blue.svg)
 ![Node](https://img.shields.io/badge/node-%3E%3D18-green.svg)
 ![Status](https://img.shields.io/badge/status-active-success.svg)
-![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)
+![Version](https://img.shields.io/badge/version-2.1.1-blue.svg)
 
-Ein hochoptimierter, modularer Minecraft-Bot, der in der Lage ist, ganze Dörfer mit Infrastruktur, Wegen und Gebäuden vollautomatisch zu errichten. Version 2.1.0 bietet verbesserte Performance und stabilere Bau-Algorithmen.
+Ein hochoptimierter, modularer Minecraft-Bot, der in der Lage ist, ganze Dörfer mit Infrastruktur, Wegen und Gebäuden vollautomatisch zu errichten. Version 2.1.1 bietet verbesserte Performance und stabilere Bau-Algorithmen.
 
 ## ✨ Features
 
