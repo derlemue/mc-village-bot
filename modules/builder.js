@@ -135,10 +135,13 @@ class Builder {
 
       console.log(`[Builder] ✅ Fundament-Bereich FREI von Straßen`);
 
-      // ✅ FUNDAMENT: Basisfläche (/fill)
-      const foundationBlock = templateData.foundation || 'stone_bricks';
-      console.log(`[Builder] 🧱 Fundament ${foundationBlock}`);
-      await this.commandHelper.fill(x, y, z, x + width - 1, y, z + depth - 1, foundationBlock);
+      // ✅ FUNDAMENT: Basisfläche (/fill) bis Y=44 (Deepslate Tiles)
+      const foundationBlock = 'deepslate_tiles';
+      const foundationBottomY = 44;
+
+      console.log(`[Builder] 🧱 Fundament ${foundationBlock} bis Y=${foundationBottomY}`);
+      // Fill from bottom up to buildY (y)
+      await this.commandHelper.fill(x, foundationBottomY, z, x + width - 1, y, z + depth - 1, foundationBlock);
 
       // ✅ WÄNDE: Höhe und Seiten (/fill)
       const wallBlock = templateData.wall || 'oak_planks';

@@ -132,11 +132,18 @@ class StreetBuilder {
         'air'
       );
 
-      // Build base (bricks)
+      // Foundation (Deepslate Tiles) to Y=44
+      await this.commandHelper.fill(
+        cx - 2, 44, cz - 2,
+        cx + 2, buildY - 1, cz + 2,
+        'deepslate_tiles'
+      );
+
+      // Build base (Birch Planks)
       await this.commandHelper.fill(
         cx - 2, buildY, cz - 2,
         cx + 2, buildY, cz + 2,
-        'bricks'
+        'birch_planks'
       );
     }
 
@@ -391,12 +398,19 @@ class StreetBuilder {
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
 
+      // Foundation (Deepslate Tiles) to Y=44
+      await this.commandHelper.fill(
+        currentX - 2, 44, currentZ,
+        currentX + 2, buildY - 1, currentZ,
+        'deepslate_tiles'
+      );
+
       // ✅ 5x1 Breite -> /fill
       // currentX - 2 to currentX + 2
       await this.commandHelper.fill(
         currentX - 2, buildY, currentZ,
         currentX + 2, buildY, currentZ,
-        'bricks'
+        'birch_planks'
       );
     }
 
