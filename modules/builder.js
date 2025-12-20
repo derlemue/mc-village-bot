@@ -140,8 +140,13 @@ class Builder {
       const foundationBottomY = 44;
 
       console.log(`[Builder] 🧱 Fundament ${foundationBlock} bis Y=${foundationBottomY}`);
-      // Fill from bottom up to buildY (y)
-      await this.commandHelper.fill(x, foundationBottomY, z, x + width - 1, y, z + depth - 1, foundationBlock);
+      // Fill from bottom up to buildY - 1 (y - 1)
+      await this.commandHelper.fill(x, foundationBottomY, z, x + width - 1, y - 1, z + depth - 1, foundationBlock);
+
+      // ✅ SURFACE FOUNDATION (Basisfläche) - Reverted to Stone/Template
+      const surfaceBlock = templateData.foundation || 'stone_bricks';
+      console.log(`[Builder] 🧱 Surface Fundament ${surfaceBlock} at Y=${y}`);
+      await this.commandHelper.fill(x, y, z, x + width - 1, y, z + depth - 1, surfaceBlock);
 
       // ✅ WÄNDE: Höhe und Seiten (/fill)
       const wallBlock = templateData.wall || 'oak_planks';

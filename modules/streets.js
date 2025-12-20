@@ -114,35 +114,55 @@ class StreetBuilder {
 
     console.log(`🛣️ Building Entry Segment from ${startX},${startZ} to ${endX},${endZ}`);
 
-    // Build the segment carefully
-    // We do NOT use global clearAbove here because it has a huge radius (+/- 4) that eats the house.
-    // We define a local safe clear function or just iterate.
+    // Build the segment carefully with SURGICAL precision to avoid house damage
     const steps = length;
     for (let i = 0; i < steps; i++) {
       const cx = startX + (dir.stepX * i);
       const cz = startZ + (dir.stepZ * i);
 
-      // Clear 5x1 (width 5) but limited vertical and NO back-clearing
-      // Street width is +/- 2 blocks from center.
-      // We only clear strictly above the street to preserve house overhangs if any, 
-      // but primarily to strictly bound X/Z.
+      // Surgical Clear: Only clear the slice at the current step
+      // Width = 9 (Center +/- 4) to match foundation width request
+      // Depth = 1 (Current step only)
+      // If moving along X (stepX != 0), extend along Z.
+      // If moving along Z (stepZ != 0), extend along X.
+
+      let minX, maxX, minZ, maxZ;
+
+      if (dir.stepX !== 0) { // Moving East/West
+        minX = cx; maxX = cx; // 1 block deep in movement dir
+        minZ = cz - 4; maxZ = cz + 4; // 9 blocks wide
+      } else { // Moving North/South
+        minX = cx - 4; maxX = cx + 4; // 9 blocks wide
+        minZ = cz; maxZ = cz; // 1 block deep in movement dir
+      }
+
+      // Clear Air
       await this.commandHelper.fill(
-        cx - 2, buildY + 1, cz - 2,
-        cx + 2, buildY + 64, cz + 2,
+        minX, buildY + 1, minZ,
+        maxX, buildY + 64, maxZ,
         'air'
       );
 
-      // Foundation (Deepslate Tiles) to Y=44
+      // Foundation (Deepslate Tiles) to Y=44 (Width 9)
       await this.commandHelper.fill(
-        cx - 2, 44, cz - 2,
-        cx + 2, buildY - 1, cz + 2,
+        minX, 44, minZ,
+        maxX, buildY - 1, maxZ,
         'deepslate_tiles'
       );
 
-      // Build base (Birch Planks)
+      // Street Surface (Birch Planks) width 5 (Center +/- 2)
+      let sMinX, sMaxX, sMinZ, sMaxZ;
+      if (dir.stepX !== 0) {
+        sMinX = cx; sMaxX = cx;
+        sMinZ = cz - 2; sMaxZ = cz + 2;
+      } else {
+        sMinX = cx - 2; sMaxX = cx + 2;
+        sMinZ = cz; sMaxZ = cz;
+      }
+
       await this.commandHelper.fill(
-        cx - 2, buildY, cz - 2,
-        cx + 2, buildY, cz + 2,
+        sMinX, buildY, sMinZ,
+        sMaxX, buildY, sMaxZ,
         'birch_planks'
       );
     }
@@ -398,18 +418,25 @@ class StreetBuilder {
       const currentX = Math.round(x1 + dx * progress);
       const currentZ = Math.round(z1 + dz * progress);
 
-      // Foundation (Deepslate Tiles) to Y=44
+      // We need to determine orientation for correct width clearing vs length
+      // For general path (diagonal possible), clearAbove handles 9x9 box.
+      // But for foundation and street, we want clean lines.
+      // Let's stick to the box approach for general paths as they curve.
+
+      // Clear Air (Standard clearAbove uses +/- 4 box, which matches our width 9 requirement)
+      // Re-implement clear here to ensure deep clear?
+      // actually clearAbove handles air.
+      // foundation:
       await this.commandHelper.fill(
-        currentX - 2, 44, currentZ,
-        currentX + 2, buildY - 1, currentZ,
+        currentX - 4, 44, currentZ - 4,
+        currentX + 4, buildY - 1, currentZ + 4,
         'deepslate_tiles'
       );
 
-      // ✅ 5x1 Breite -> /fill
-      // currentX - 2 to currentX + 2
+      // Street Surface (Birch Planks) +/- 2
       await this.commandHelper.fill(
-        currentX - 2, buildY, currentZ,
-        currentX + 2, buildY, currentZ,
+        currentX - 2, buildY, currentZ - 2,
+        currentX + 2, buildY, currentZ + 2,
         'birch_planks'
       );
     }
