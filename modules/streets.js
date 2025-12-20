@@ -112,9 +112,9 @@ class StreetBuilder {
     const startX = doorX + dir.stepX;
     const startZ = doorZ + dir.stepZ;
 
-    // End 8 blocks away (inclusive of start, so +7 more steps? OR 8 blocks length)
-    // "8 Blöcke Straße geradeaus" -> Length 8.
-    const length = 8;
+    // End 10 blocks away (inclusive of start)
+    // "10 Blöcke Straße geradeaus" -> Length 10.
+    const length = 10;
     const endX = startX + (dir.stepX * (length - 1));
     const endZ = startZ + (dir.stepZ * (length - 1));
 
@@ -126,8 +126,8 @@ class StreetBuilder {
       const cx = startX + (dir.stepX * i);
       const cz = startZ + (dir.stepZ * i);
 
-      // Surgical Clear: Only clear the slice at the current step
-      // Width = 9 (Center +/- 4) to match foundation width request
+      // Surgical Build: Only build the slice at the current step
+      // Width = 3 (Center +/- 1) to match requirement (3 blocks wide)
       // Depth = 1 (Current step only)
       // If moving along X (stepX != 0), extend along Z.
       // If moving along Z (stepZ != 0), extend along X.
@@ -136,39 +136,25 @@ class StreetBuilder {
 
       if (dir.stepX !== 0) { // Moving East/West
         minX = cx; maxX = cx; // 1 block deep in movement dir
-        minZ = cz - 4; maxZ = cz + 4; // 9 blocks wide
+        minZ = cz - 1; maxZ = cz + 1; // 3 blocks wide
       } else { // Moving North/South
-        minX = cx - 4; maxX = cx + 4; // 9 blocks wide
+        minX = cx - 1; maxX = cx + 1; // 3 blocks wide
         minZ = cz; maxZ = cz; // 1 block deep in movement dir
       }
 
-      // Clear Air
-      await this.commandHelper.fill(
-        minX, buildY + 1, minZ,
-        maxX, buildY + 64, maxZ,
-        'air'
-      );
+      // NO Clear Air (Non-destructive)
 
-      // Foundation (Deepslate Tiles) to Y=44 (Width 9)
+      // Foundation (Deepslate Tiles) to Y=44 (Width 3)
       await this.commandHelper.fill(
         minX, 44, minZ,
         maxX, buildY - 1, maxZ,
         'deepslate_tiles'
       );
 
-      // Street Surface (Birch Planks) width 5 (Center +/- 2)
-      let sMinX, sMaxX, sMinZ, sMaxZ;
-      if (dir.stepX !== 0) {
-        sMinX = cx; sMaxX = cx;
-        sMinZ = cz - 2; sMaxZ = cz + 2;
-      } else {
-        sMinX = cx - 2; sMaxX = cx + 2;
-        sMinZ = cz; sMaxZ = cz;
-      }
-
+      // Street Surface (Birch Planks) width 3 (Center +/- 1)
       await this.commandHelper.fill(
-        sMinX, buildY, sMinZ,
-        sMaxX, buildY, sMaxZ,
+        minX, buildY, minZ,
+        maxX, buildY, maxZ,
         'birch_planks'
       );
     }
