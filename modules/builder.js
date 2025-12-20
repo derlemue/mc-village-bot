@@ -93,6 +93,14 @@ class Builder {
     return null;
   }
 
+  getDoorFacing(doorX, doorZ, x, z, width, depth) {
+    if (doorZ === z) return 'north';
+    if (doorZ === z + depth - 1) return 'south';
+    if (doorX === x) return 'west';
+    if (doorX === x + width - 1) return 'east';
+    return 'north';
+  }
+
   async buildBuilding(building, templateData) {
     const { x, y, z, width, depth, height } = building;
     console.log(`[Builder] 🏗️ Baue ${templateData.name} bei ${x},${y},${z} (${width}x${height}x${depth})`);
@@ -163,14 +171,19 @@ class Builder {
         }
       }
 
-      // ✅ TÜR: Haupteingang
+      // ✅ TÜR: Haupteingang with CORRECT STATE
       console.log(`[Builder] 🚪 Tür bei ${x + (building.doorPos?.x || 8)},${y},${z + (building.doorPos?.z || 0)}`);
       const doorX = x + (building.doorPos?.x || Math.floor(width / 2));
       const doorZ = z + (building.doorPos?.z || 0);
       const doorBlock = templateData.door || 'oak_door';
-      this.bot.chat(`/setblock ${doorX} ${y + 1} ${doorZ} ${doorBlock}`);
+
+      const facing = this.getDoorFacing(doorX, doorZ, x, z, width, depth);
+      console.log(`[Builder] 🚪 Richtung: ${facing}`);
+
+      // Update calls to use [half=lower/upper,facing=X]
+      this.bot.chat(`/setblock ${doorX} ${y + 1} ${doorZ} ${doorBlock}[half=lower,facing=${facing}]`);
       await new Promise(r => setTimeout(r, 50));
-      this.bot.chat(`/setblock ${doorX} ${y + 2} ${doorZ} ${doorBlock}[upper=true]`);
+      this.bot.chat(`/setblock ${doorX} ${y + 2} ${doorZ} ${doorBlock}[half=upper,facing=${facing}]`);
       await new Promise(r => setTimeout(r, 50));
 
       // ✅ BELEUCHTUNG: Innenlaternen (Optional)

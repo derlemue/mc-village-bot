@@ -84,101 +84,68 @@ class StreetBuilder {
   getDoorDirection(doorX, doorZ, building) {
     const width = building.width || 16;
     const depth = building.depth || 16;
-    if (doorZ === building.z) return { stepX: 0, stepZ: 1 };
-    if (doorX === building.x) return { stepX: 1, stepZ: 0 };
-    if (doorX === building.x + width - 1) return { stepX: -1, stepZ: 0 };
+
+    // Detect which wall the door is on and point OUTWARDS
+    if (doorZ === building.z) return { stepX: 0, stepZ: -1 }; // North face, go North (-Z)
+    if (doorZ === building.z + depth - 1) return { stepX: 0, stepZ: 1 }; // South face, go South (+Z)
+    if (doorX === building.x) return { stepX: -1, stepZ: 0 }; // West face, go West (-X)
+    if (doorX === building.x + width - 1) return { stepX: 1, stepZ: 0 }; // East face, go East (+X)
+
+    // Default fallback (should not happen if door is on edge)
     return { stepX: 0, stepZ: 1 };
   }
 
-  findNearestSafePoint(buildY, doorX, doorZ, building) {
-    console.log(`🔍 FALLBACK: Suche nächsten sicheren Punkt`);
-    const width = building.width || 16;
-    const depth = building.depth || 16;
+  async buildEntrySegment(buildY, building) {
+    const doorX = building.x + (building.doorPos?.x || 8);
+    const doorZ = building.z + (building.doorPos?.z || 0);
+    const dir = this.getDoorDirection(doorX, doorZ, building);
 
-    const candidates = [
-      { x: doorX, z: building.z - 1, dist: 0 },
-      { x: building.x - 1, z: doorZ, dist: 0 },
-      { x: building.x + width, z: doorZ, dist: 0 },
-      { x: doorX, z: building.z + depth, dist: 0 }
-    ];
+    console.log(`🛣️ Entry Segment: Building ${building.name} at ${doorX},${doorZ} dir ${dir.stepX},${dir.stepZ}`);
 
-    const safePoints = candidates.filter(p => {
-      // ✅ 5x1 Prüfung
-      for (let ox = -2; ox <= 2; ox++) {
-        if (this.isPositionInAnyBuilding(p.x + ox, p.z) || this.isPositionOnStreet(p.x + ox, p.z)) {
-          return false;
-        }
-      }
-      return true;
-    });
+    // Start 1 block away from door to avoid overwriting the door itself or threshold
+    const startX = doorX + dir.stepX;
+    const startZ = doorZ + dir.stepZ;
 
-    if (safePoints.length === 0) {
-      console.log('❌ Kein sicherer Punkt gefunden! Verwende Tür-Position');
-      return { x: doorX, z: doorZ - 1 };
+    // End 8 blocks away (inclusive of start, so +7 more steps? OR 8 blocks length)
+    // "8 Blöcke Straße geradeaus" -> Length 8.
+    const length = 8;
+    const endX = startX + (dir.stepX * (length - 1));
+    const endZ = startZ + (dir.stepZ * (length - 1));
+
+    console.log(`🛣️ Building Entry Segment from ${startX},${startZ} to ${endX},${endZ}`);
+
+    // Build the segment carefully
+    // We do NOT use global clearAbove here because it has a huge radius (+/- 4) that eats the house.
+    // We define a local safe clear function or just iterate.
+    const steps = length;
+    for (let i = 0; i < steps; i++) {
+      const cx = startX + (dir.stepX * i);
+      const cz = startZ + (dir.stepZ * i);
+
+      // Clear 5x1 (width 5) but limited vertical and NO back-clearing
+      // Street width is +/- 2 blocks from center.
+      // We only clear strictly above the street to preserve house overhangs if any, 
+      // but primarily to strictly bound X/Z.
+      await this.commandHelper.fill(
+        cx - 2, buildY + 1, cz - 2,
+        cx + 2, buildY + 64, cz + 2,
+        'air'
+      );
+
+      // Build base (bricks)
+      await this.commandHelper.fill(
+        cx - 2, buildY, cz - 2,
+        cx + 2, buildY, cz + 2,
+        'bricks'
+      );
     }
 
-    safePoints.forEach(p => {
-      p.dist = Math.abs(p.x - doorX) + Math.abs(p.z - doorZ);
-    });
+    // Add lanterns? Maybe at end?
+    // Let's stick to base requirements. "8 Blöcke Straße". Laternen come with logic.
+    // But we should probably add one at the end or begin.
+    // existing buildStreetLanterns might work if called on this segment, but we want to avoid complex logic here.
 
-    safePoints.sort((a, b) => a.dist - b.dist);
-    const nearest = safePoints[0];
-    console.log(`✅ Sicherer Punkt gefunden: ${nearest.x},${nearest.z}`);
-    return { x: nearest.x, z: nearest.z };
-  }
-
-  async buildStreetToBuildingEdge(buildY, startX, startZ, building) {
-    console.log(`🛣️ Phase1: Finde Rand von ${startX},${startZ}`);
-    const direction = this.getDoorDirection(startX, startZ, building);
-    const pathPoints = [];
-    let currentX = startX;
-    let currentZ = startZ;
-
-    for (let i = 0; i < 32; i++) {
-      // Prüfen ob wir noch auf dem Fundament des Startgebäudes sind
-      const onFoundation = this.isPositionInSpecificBuilding(currentX, currentZ, building);
-
-      // Prüfen ob wir in einem ANDEREN Gebäude sind (Kollision)
-      let collision = false;
-      for (const village of this.villages) {
-        for (const otherB of village.buildings) {
-          if (otherB === building) continue;
-          if (this.isPositionInSpecificBuilding(currentX, currentZ, otherB)) {
-            collision = true;
-            break;
-          }
-        }
-        if (collision) break;
-      }
-
-      if (collision) {
-        console.log(`🛑 Blockiert durch anderes Gebäude bei ${currentX},${currentZ}`);
-        break;
-      }
-
-      pathPoints.push({ x: currentX, z: currentZ });
-
-      // Wenn wir das Fundament verlassen haben, ist das der Rand ("Ab diesem Punkt")
-      if (!onFoundation) {
-        console.log(`✅ Rand gefunden (Verlassen Foundation): ${currentX},${currentZ}`);
-        break;
-      }
-
-      currentX += direction.stepX;
-      currentZ += direction.stepZ;
-    }
-
-    if (pathPoints.length === 0) {
-      console.log('❌ Kein Weg gefunden');
-      return null;
-    }
-
-    const edgeX = pathPoints[pathPoints.length - 1].x;
-    const edgeZ = pathPoints[pathPoints.length - 1].z;
-
-    await this.clearAbove(buildY, startX, startZ, edgeX, edgeZ);
-    await this.buildPath(buildY, startX, startZ, edgeX, edgeZ);
-    return { x: edgeX, z: edgeZ };
+    return { x: endX, z: endZ };
   }
 
   isPositionInSpecificBuilding(x, z, building) {
@@ -237,19 +204,10 @@ class StreetBuilder {
   async buildStreetToVillageCentrum(buildY, building, village) {
     console.log(`🛣️ ERSTES GEBÄUDE: Baue Straße zu Village-Zentrum`);
 
-    const doorX = building.x + (building.doorPos?.x || 8);
-    const doorZ = building.z + (building.doorPos?.z || 0);
-    const fromStartX = doorX;
-    const fromStartZ = doorZ - 1;
-    const centrumX = village.centerX;
-    const centrumZ = village.centerZ;
-
-    console.log(`📍 Von: ${fromStartX},${fromStartZ} -> Zentrum: ${centrumX},${centrumZ}`);
-
-    let fromEdge = await this.buildStreetToBuildingEdge(buildY, fromStartX, fromStartZ, building);
+    let fromEdge = await this.buildEntrySegment(buildY, building);
     if (!fromEdge) {
-      console.log('⚠️ Phase1 Fallback: Verwende nächsten sicheren Punkt');
-      fromEdge = this.findNearestSafePoint(buildY, doorX, doorZ, building);
+      console.log('⚠️ Entry Segment Failed');
+      return;
     }
 
     console.log(`🛣️ Phase2: ${fromEdge.x},${fromEdge.z} -> ${centrumX},${centrumZ}`);
@@ -283,21 +241,21 @@ class StreetBuilder {
   async buildStreetToBuilding(buildY, fromBuilding, toBuilding) {
     console.log(`🛣️ StreetBuilder START: ${fromBuilding.name} -> ${toBuilding.name}`);
 
-    const doorX = fromBuilding.x + (fromBuilding.doorPos?.x || 8);
-    const doorZ = fromBuilding.z + (fromBuilding.doorPos?.z || 0);
-    const fromStartX = doorX;
-    const fromStartZ = doorZ - 1;
-
-    let fromEdge = await this.buildStreetToBuildingEdge(buildY, fromStartX, fromStartZ, fromBuilding);
+    let fromEdge = await this.buildEntrySegment(buildY, fromBuilding);
     if (!fromEdge) {
-      console.log('⚠️ Fallback: Verwende nächsten sicheren Punkt');
-      fromEdge = this.findNearestSafePoint(buildY, doorX, doorZ, fromBuilding);
+      console.log('⚠️ Entry Segment Failed');
+      return;
     }
 
-    const toDoorX = toBuilding.x + (toBuilding.doorPos?.x || 8);
-    const toDoorZ = toBuilding.z + (toBuilding.doorPos?.z || 0);
-    const toStartX = toDoorX;
-    const toStartZ = toDoorZ - 1;
+    // Target is another building. Should we also build an entry segment FOR the target?
+    // "Straßenbaulogik Häuser an diesem Punkt mit dem Netz verbindet"
+    // Ideally, YES. We should pathfind to the entry-point of the target building, not its door directly.
+
+    let toEntry = await this.buildEntrySegment(buildY, toBuilding);
+    // pathfind from fromEdge (end of start segment) to toEntry (end of target segment)
+
+    const toStartX = toEntry.x;
+    const toStartZ = toEntry.z;
 
     console.log(`🛣️ Phase2: ${fromEdge.x},${fromEdge.z} -> ${toStartX},${toStartZ}`);
     let path2 = { x1: fromEdge.x, z1: fromEdge.z, x2: toStartX, z2: toStartZ };
