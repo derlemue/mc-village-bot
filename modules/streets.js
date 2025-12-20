@@ -67,13 +67,19 @@ class StreetBuilder {
     return false;
   }
 
-  isPositionInAnyBuilding(x, z) {
+  isPositionInAnyBuilding(x, z, buffer = 0) {
     for (const village of this.villages) {
       for (const building of village.buildings) {
         const width = building.width || 16;
         const depth = building.depth || 16;
-        if (x >= building.x && x < building.x + width &&
-          z >= building.z && z < building.z + depth) {
+        // Check with buffer: strict > and < to allow buffer edge?
+        // Let's say buffer=1. Building at 10. Range 10..26.
+        // check: x >= 10-1 (9) && x < 26+1 (27).
+        // If x=9, it returns true (COLLISION).
+        // If x=8, it returns false (SAFE).
+        // This effectively keeps a 1-block clear zone around the building.
+        if (x >= building.x - buffer && x < building.x + width + buffer &&
+          z >= building.z - buffer && z < building.z + depth + buffer) {
           return true;
         }
       }
@@ -193,7 +199,7 @@ class StreetBuilder {
 
       // ✅ 5x1 Prüfung
       for (let ox = -2; ox <= 2; ox++) {
-        if (this.isPositionInAnyBuilding(currentX + ox, currentZ)) {
+        if (this.isPositionInAnyBuilding(currentX + ox, currentZ, 1)) {
           return false;
         }
       }
